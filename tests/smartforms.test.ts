@@ -254,6 +254,21 @@ describe("CreateSmartForm", () => {
     expect(sent["xml"]).toContain("<sf:SMARTFORM");
   });
 
+  it("fails when activation produced no generated function module", async () => {
+    const { call } = booted(() => ({
+      FORM_NAME: "ZMCP_PROBE",
+      LANGUAGE: "E",
+      STORED: "X",
+      ACTIVE: "X",
+      PACKAGE_NAME: "$TMP",
+      GENERATED_FM: "",
+    }));
+
+    await expect(
+      call("CreateSmartForm", { form_name: "ZMCP_PROBE", xml_file: xmlFile() }),
+    ).rejects.toThrow(/generated no function module/);
+  });
+
   it("asks for an inactive form with N, because an empty string means 'not passed'", async () => {
     const { call, params } = booted(() => ({
       FORM_NAME: "ZMCP_PROBE",

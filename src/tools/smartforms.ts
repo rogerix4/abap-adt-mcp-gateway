@@ -555,6 +555,22 @@ async function createForm(args: Args, ctx: ToolContext, runtime: GatewayRuntime)
     activate: switchFlag(flagOn(args, "activate", true)),
   });
   const result = (answer.result ?? {}) as Record<string, unknown>;
+  // `ACTIVE` says the form was stored, not that SAP could generate its function
+  // module. A form whose interface names a missing type is stored active but has no
+  // generated module; the old success answer sent the caller to `RenderSmartForm`,
+  // which then failed with a misleading "activate it first". Treat that as the
+  // activation failure it is.
+  if (flagOn(args, "activate", true) && String(result.GENERATED_FM ?? "") === "") {
+    throw new GatewayError(
+      "UPSTREAM_FAILED",
+      `${tool}: SmartForm ${name} was stored but SAP generated no function module.`,
+      {
+        details: { result },
+        nextAction:
+          "check the form interface types (a missing DDIC/CDS structure or table type is the usual cause), then activate the form in SMARTFORMS and render it again",
+      },
+    );
+  }
   return {
     success: true,
     transport: "rfc",

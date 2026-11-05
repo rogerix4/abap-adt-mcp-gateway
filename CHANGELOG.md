@@ -46,7 +46,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Write-concurrency tests for several systems** in `tests/contract.test.ts`: writes to
   different systems overlap, and two writes to the same system are serialised.
 - **Regression tests for GUI status creation and SQL preview**: `tests/cua.test.ts` pins
-  the single-status reference copy, `tests/sql-query.test.ts` pins the `SELECT` precheck,
+  the single-status reference copy, `tests/sql-query.test.ts` pins the `SELECT` precheck
+  and the SQL failure classification, `tests/smartforms.test.ts` pins the create guard,
   and `tests/check-retry.test.ts` covers the inactive-to-active check fallback.
 
 ### Fixed
@@ -74,6 +75,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `SELECT`, caps `row_number` at 5000, requests one extra row so `truncated` reflects
   whether more rows exist, and maps syntax or temporary-pool failures to
   `INVALID_ARGUMENT` / `UPSTREAM_FAILED` with actionable guidance.
+- **`CreateSmartForm` no longer reports a stored-but-ungenerated form as success.** When
+  activation returns an active form without a generated function module, the tool answers
+  `UPSTREAM_FAILED` with the form interface check as the next action, instead of leaving
+  `RenderSmartForm` to fail later with "activate it first".
+- **`GetSqlQuery` separates ADT internal 500s from invalid SQL.** `Invalid access with
+  negative length to a string` is now `UPSTREAM_FAILED` (simplify the query or read the
+  table directly), while unknown columns remain `INVALID_ARGUMENT`. The unknown-column
+  hint names the recurring table mistakes: `AS4TEXT` belongs to `E07T` (not `E070`),
+  `RBUKRS` belongs to `ACDOCA`/`FAGLFLEXT` (not `T001`), and `SPRAS` is a one-character
+  language key (`'1'` on this system, not `'ZH'`).
 
 ### Deprecated
 

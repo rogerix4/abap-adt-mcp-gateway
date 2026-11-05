@@ -10,6 +10,7 @@ import type { ToolRegistry } from "../engine/registry.js";
 import type { GatewayRuntime } from "../runtime.js";
 import { GatewayError } from "../engine/errors.js";
 import { parseDataPreview } from "../adt/datapreview.js";
+import { AdtError } from "../adt/errors.js";
 import { isCuaMissingError, RfcBridge } from "../adt/rfc.js";
 import type { AdtSession } from "../adt/session.js";
 import { registerProfilerTools } from "./profiler.js";
@@ -296,6 +297,73 @@ export function precheckSqlQuery(sql: string): string {
   return trimmed;
 }
 
+/** A classified `GetSqlQuery` failure, or `undefined` for an unclassified error. */
+export interface SqlQueryFailure {
+  readonly code: "INVALID_ARGUMENT" | "UPSTREAM_FAILED";
+  readonly nextAction: string;
+}
+
+/**
+ * Turns the words SAP uses for Data Preview failures into a stable code and a hint.
+ *
+ * The old catch-all used the word `invalid`, which also matched the HTTP 500 text
+ * `Invalid access with negative length to a string` and reported an ADT internal
+ * error as if the caller's SQL were invalid. Unknown columns and one-character
+ * language keys are caller errors; a 500 is not.
+ */
+export function classifySqlQueryFailure(message: string, status?: number): SqlQueryFailure | undefined {
+  if (/temporary (subroutine )?pool|TSV_TNEW|no more storage|out of memory/i.test(message)) {
+    return {
+      code: "UPSTREAM_FAILED",
+      nextAction:
+        "the system ran out of temporary program space; wait for the pool to clear, reduce row_number, or use GetTableContentsLow for a direct table read",
+    };
+  }
+  if ((status !== undefined && status >= 500) || /Application Server Error 500|Internal Server Error|SAP reported a server error/i.test(message)) {
+    return {
+      code: "UPSTREAM_FAILED",
+      nextAction:
+        "ADT Data Preview's SQL rewriter breaks on wide aggregate SELECTs (6 aggregate columns work; 10+ can return a spurious GROUP BY error or this 500). Simplify by splitting into at most 6 aggregates, select raw rows and aggregate in ABAP, or use GetTableContents for a direct table read",
+    };
+  }
+
+  const column = /Unknown column name "([^"]+)"/i.exec(message)?.[1]?.toUpperCase();
+  if (column !== undefined) {
+    const hint =
+      column === "AS4TEXT"
+        ? "AS4TEXT is in E07T, not E070. Data Preview accepts one plain SELECT and rejects joins: read the E070 header and the E07T text in two queries, then merge by TRKORR (LANGU selects one language)"
+        : column === "AS4USER" || column === "TRFUNCTION" || column === "TRSTATUS"
+          ? `${column} belongs to E070; E07T has only TRKORR / LANGU / AS4TEXT. Read E070 and E07T separately and merge by TRKORR — this endpoint rejects joins`
+          : column === "RBUKRS"
+            ? "RBUKRS is a field of ACDOCA / FAGLFLEXT; T001 uses BUKRS"
+            : `check ${column} against DD03L or the table's own field list`;
+    return { code: "INVALID_ARGUMENT", nextAction: hint };
+  }
+
+  if (/仅允许一个 SELECT 语句|only one SELECT statement/i.test(message)) {
+    return {
+      code: "INVALID_ARGUMENT",
+      nextAction:
+        "ADT Data Preview accepts one plain SELECT and does not support JOIN; query each table separately and merge the rows in the caller",
+    };
+  }
+
+  if (/不是 C\(1,0\) 的有效值|not a valid value for.*C\(1,0\)/i.test(message)) {
+    return {
+      code: "INVALID_ARGUMENT",
+      nextAction: "SPRAS is a one-character language key; on this system use '1' for Chinese, not 'ZH'",
+    };
+  }
+  if (/syntax error|unexpected|not supported|grammar/i.test(message)) {
+    return {
+      code: "INVALID_ARGUMENT",
+      nextAction:
+        "use a plain SELECT with explicit columns; Data Preview rejects DESC, <> and NOT = — use ORDER BY ... DESCENDING, NE and NOT ( ... )",
+    };
+  }
+  return undefined;
+}
+
 export function registerReadTools(registry: ToolRegistry, runtime: GatewayRuntime): void {
   if (registry.has("GetSqlQuery")) {
     registry.register("GetSqlQuery", async (args, ctx) => {
@@ -322,17 +390,9 @@ export function registerReadTools(registry: ToolRegistry, runtime: GatewayRuntim
         });
       } catch (error) {
         const message = String((error as Error).message ?? error);
-        if (/temporary (subroutine )?pool|TSV_TNEW|no more storage|out of memory|resource/i.test(message)) {
-          throw new GatewayError("UPSTREAM_FAILED", `GetSqlQuery: ${message}`, {
-            nextAction:
-              "the system ran out of temporary program space; wait for the pool to clear, reduce row_number, or use GetTableContentsLow for a direct table read",
-          });
-        }
-        if (/syntax error|unexpected|not supported|invalid|grammar|unknown/i.test(message)) {
-          throw new GatewayError("INVALID_ARGUMENT", `GetSqlQuery: SAP rejected the statement: ${message}`, {
-            nextAction:
-              "use a plain SELECT with explicit columns; Data Preview rejects DESC, <> and NOT = — use ORDER BY ... DESCENDING, NE and NOT ( ... )",
-          });
+        const failure = classifySqlQueryFailure(message, error instanceof AdtError ? error.status : undefined);
+        if (failure !== undefined) {
+          throw new GatewayError(failure.code, `GetSqlQuery: ${message}`, { nextAction: failure.nextAction });
         }
         throw error;
       }
