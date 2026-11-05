@@ -9,7 +9,7 @@ MCP client ──stdio──▶ dist/bin.js
                         ├─ config/load.ts      layered config + zod validation
                         ├─ config/secrets.ts   resolves keychain:/env:/file: into real credentials
                         ├─ runtime.ts          systems, tiers, one AdtSession per system
-                        └─ mcp/server.ts       tools/list (adds `system`), tools/call (serialized writes)
+                        └─ mcp/server.ts       tools/list (adds `system`), tools/call (writes queued per system)
                               └─ engine/registry.ts ─ handlers ─┬─ tools/routes.ts     high level: one object, one route
                                                                ├─ families/handlers.ts same-verb families
                                                                └─ tools/bridges.ts     what ADT lacks → RFC bridge
@@ -17,6 +17,7 @@ MCP client ──stdio──▶ dist/bin.js
 ```
 
 One process. No child processes, no external engine, no patches over an installed package.
+All configured systems are held at once — see [Multi-system concurrency](#multi-system-concurrency).
 
 ## Protocol layer
 
@@ -25,8 +26,8 @@ One process. No child processes, no external engine, no patches over an installe
 | Wire format | JSON-RPC 2.0 over stdio; stdout carries the protocol and nothing else, diagnostics go to stderr |
 | Protocol versions | `2025-11-25`, `2025-06-18`, `2025-03-26`, `2024-11-05`, `2024-10-07` — the version the client asks for is echoed back (`@modelcontextprotocol/sdk` 1.32.2) |
 | Capabilities | `tools` only, `listChanged: false`. The contract is fixed before the transport connects, so the list never changes after `initialize` |
-| Advertised subset | `toolPolicy.layers` / `allow` / `deny` filter the list at `tools/list`; the registry still holds all 335 and calls by name still work |
-| Gateway mode | Default on. `toolPolicy.gateway` adds `GatewayListSystems`, `GatewayListTools`, `GatewayCallTool` — three visible tools that reach the whole contract; `GatewayCallTool` runs writes through the same serialization and tier checks |
+| Advertised subset | `toolPolicy.expose` picks one level — `none` … `full`, plus `core`; the default is `gateway` (three tools, whole contract) — then `allow` / `deny` narrow it; the registry still holds all 335 and calls by name still work |
+| The facade | `gateway` and `core` advertise `GatewayListSystems`, `GatewayListTools`, `GatewayCallTool` — three tools that reach the whole contract; `GatewayCallTool` runs writes through the same serialization and tier checks |
 | Not advertised | resources, prompts, sampling, logging |
 | Tool annotations | Derived per tool (`readOnlyHint`, `destructiveHint`, `idempotentHint`). Advisory for clients; they never alter a name, description or schema |
 | Transport | stdio only. There is no HTTP or SSE listener |
@@ -38,9 +39,78 @@ One process. No child processes, no external engine, no patches over an installe
 - `Low` means "the caller owns the lock and the session": one tool call, one ADT request. It does not mean "the twin of the tool next to it" — 89 of the 134 `*Low` tools have no high-level sibling.
 - `tools/layer-map.json` carries the metadata derived from each schema (needs a `lock_handle`, writes or not). Do not infer it from the name.
 
+## Multi-system concurrency
+
+`systems[]` is not a list of endpoints to pick from at startup — it is a set of sessions that are
+alive at the same time.
+
+```
+runtime.ts
+  #entries: Map<system id, { system, session, sessionId: "sys:<id>" }>
+    "dev" → AdtSession(dev.url, client 100)   own cookie jar · CSRF · sap-adt-connection-id
+    "qa"  → AdtSession(qa.url,  client 100)   own cookie jar · CSRF · sap-adt-connection-id
+    "prd" → AdtSession(prd.url, client 100)   own cookie jar · CSRF · sap-adt-connection-id
+```
+
+- The `GatewayRuntime` constructor builds one `AdtSession` per configured system; no other part
+  of the process holds a session, and there is no "current system" field that could drift.
+- Sessions log on lazily: the first request to a system establishes it, and the same session —
+  same cookies, same CSRF token, same `sap-adt-connection-id` — serves every later call.
+  `sap-usercontext` is pinned to that system's client (`adt/session.ts`), and the connection id
+  is what makes a lock handle valid in the next tool call.
+- Selecting another system costs a `Map` lookup, not a logon. That is the whole point of the
+  design: a conversation can read production while it writes development, and neither call
+  waits for the other.
+
+### What is kept apart
+
+| Item | Keyed by | What goes wrong if it were shared |
+|---|---|---|
+| `AdtSession`: cookie jar, CSRF token, `sap-adt-connection-id`, `sap-usercontext` | system id | A lock handle and an activation are valid only in the session that created them |
+| Write queue (`mcp/server.ts`, `writeChains`) | system id | Two writes in one stateful session interleave LOCK / UNLOCK and one strands a lock |
+| Lock journal (`adt/lock-journal.ts`) | `sha1(base URL \| client \| user)` | Releasing a handle on a server that never issued it — and two logons of one system erasing each other |
+| Tier (`runtime.resolve`) | system id, every call | Write permission is a property of the target, not of the caller |
+| `session_id` (`sys:<id>`) | system id, validated | `Lock*Low` then `Update*Low` with another system's id would land in the wrong ABAP session |
+| Bridge modules (`abap/`, `import-abap-bridges.mjs --profile <id>`) | installed into one system | A tool backed by a module the target lacks fails there only, instead of everywhere |
+
+### What stays shared
+
+| Item | Consequence |
+|---|---|
+| Configuration (layers, credential references, `defaultSystem`) | One file describes every system; `ReloadProfile` re-reads all of them |
+| Tool contract (335 names, descriptions, schemas) | One advertised list for all systems — `system` is the routing argument, not a per-system variant of the same name |
+| Advertised `system` enum, its description and `GatewayListSystems` | Built from the configuration at **startup**; `ReloadProfile` rebuilds sessions but not this list, so restart after changing the system set |
+| `toolPolicy` | Narrowing the advertised list cannot make one system write-capable or read-only (that is the tier) |
+| Lock journal directory | One file per system identity, in the same folder |
+| Process | A crash or a reload drops every session; each system then logs on lazily again |
+
+### Resolving a call
+
+`runtime.resolve(system, sessionId, needsWrite)` decides, in this order:
+
+1. `system ?? defaultSystem()` — `defaultSystem()` answers only when exactly one system is configured.
+2. Nothing to resolve (no system configured, or several and none named) → `SYSTEM_UNKNOWN`, and the message lists the ids.
+3. Unknown id → `SYSTEM_UNKNOWN` with the ids it does know.
+4. `session_id` naming another system → `INVALID_ARGUMENT` with the expected one.
+5. `needsWrite` on a tier other than `dev` → `SYSTEM_READ_ONLY` with `system` and `tier`.
+
+`defaultSystem` in the configuration is a default for the description text and the
+`GatewayListSystems` answer. With several systems configured it does **not** make `system`
+optional, and it never redirects a call that names its target.
+
+### Concurrency
+
+| In flight | Behaviour | Why |
+|---|---|---|
+| read + read, same system | concurrent | Reads take no lock, so they cannot strand one; serialising them would make a wide scan block everything else |
+| read + write, same system | concurrent | Same reason, from the other side: the read changes no state |
+| write + write, different systems | concurrent | separate queues, separate sessions, separate journals |
+| write + write, same system | queued | interleaved LOCK / UNLOCK in one stateful session strands a lock |
+| `ReloadProfile` + anything | every session closes | the one globally disruptive operation: in-flight calls to any system fail and have to be retried |
+
 ## Sessions and locks
 
-One `AdtSession` per system, reused for every call. This is a requirement, not an optimisation: a lock handle is valid only in the session that created it, so `Lock*Low` followed by `Update*Low` in a later call must land in the same ABAP session.
+One `AdtSession` per system (see above), reused for every call — a lock handle is valid only in the session that created it, so `Lock*Low` followed by `Update*Low` in a later call must land in the same ABAP session.
 
 What the session holds on to:
 
@@ -68,7 +138,7 @@ A lock handle appears exactly once, in the response that created it. If that res
 - A target on tier `qa` or `prd` raises `SYSTEM_READ_ONLY` with `system` and `tier`.
 - A missing or misspelled tier is treated as `prd`, so a copied configuration cannot open a production system for writing.
 
-Concurrency: writes to the same system are queued in `mcp/server.ts`; reads are not. Two writes in flight against one stateful session interleave LOCK and UNLOCK, and the loser ends up holding a lock it never released.
+Concurrency is decided per system — the matrix is under [Multi-system concurrency](#multi-system-concurrency).
 
 ## Error classification
 
@@ -132,7 +202,7 @@ Five layers, lowest priority first: defaults → user → workspace (both `<cwd>
 | `probe-routes.mjs` | Verifies every route against a real system: `--families` adds family verbs, `--dry-run` only builds URLs, `--filter` narrows |
 | `probe-bridge.mjs` | Verifies the 16 bridged tools (requires the bridge) |
 | `mcp-status.mjs` | Lists running gateway processes, marks one that predates `dist/`, and can stop them (`--kill`) |
-| `tool-presets.mjs` | Prints `toolPolicy` fragments: `full`, `gateway`, `readonly`, `high`, `core`; `--check` reports the advertised count |
+| `tool-presets.mjs` | Prints the exposure levels and their sizes, and the `toolPolicy` fragment for one; reads the built engine so counts cannot drift |
 | `import-abap-bridges.mjs` | Installs or reinstalls the four bridge modules and smoke-tests them |
 | `gen-schema.mjs`, `gen-tools-doc.mjs` | Generate `adt-mcp.schema.json` and `docs/TOOLS.md`; `--check` fails on drift |
 | `verify-catalog.mjs`, `scan-private.mjs`, `check-deprecated.mjs`, `analyze-catalog.mjs` | Contract integrity, secret scan, deprecated symbols, contract analysis |
@@ -149,7 +219,7 @@ All tests are offline — either a scripted HTTP layer or `InMemoryTransport`. T
 
 | Decision | Reason | Cost |
 |---|---|---|
-| One process instead of child processes | One configuration, one lock journal | A slow system delays **writes** to other systems; reads are unaffected |
-| One session per system | A lock handle must survive across calls | Writes to one system are serialized |
+| One process instead of child processes | One configuration, one lock journal, one place that enforces the write boundary | A crash or a `ReloadProfile` drops every session; a reload interrupts in-flight calls to every system |
+| One session per system, live from startup | A lock handle must survive across calls, and changing the target must not cost a logon | Writes to one system are serialised; a slow system slows only its own writes, never another system's |
 | No source caching | Distinguishing active from draft content is too easy to get wrong | Every read is a real read |
-| Frozen tool contract | Prompts and scripts keep working | New capability needs a new tool, not a renamed one |
+| Frozen tool contract, built at startup | Prompts and scripts keep working; one list serves every system | New capability needs a new tool, not a renamed one; the advertised `system` enum and descriptions do not follow a `ReloadProfile`, so changing the system set needs a restart |

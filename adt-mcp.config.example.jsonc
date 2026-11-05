@@ -8,68 +8,16 @@
 
   "defaultSystem": "dev",
 
-  // Visibility only, not authorisation. Layers pick which kinds of tool exist for this
-  // client (readonly / write / low); allow + deny narrow it; gateway adds the three
-  // Gateway* tools that reach the whole contract by name. Clients hand the model a
-  // bounded list (some stop at 128), so this advertises 127 of the 335.
-  // Regenerate with: node tools/scripts/tool-presets.mjs --preset core
+  // Visibility only, not authorisation. `expose` picks one level — none | gateway |
+  // readonly | write | low | high | full | core — and `allow` keeps only matching tools,
+  // then `deny` removes matching ones. Clients hand the model a bounded list (some stop at
+  // 128), so `core` is the practical shape: 124 curated tools plus the 3 Gateway* ones.
+  // List levels and counts with: node tools/scripts/tool-presets.mjs
   "toolPolicy": {
     "timeoutMs": 180000,
-    "gateway": true,
-    "layers": [
-      "readonly",
-      "write"
-    ],
-    "allow": [
-      "SearchObject",
-      "GetObjectInfo",
-      "GetObjectStructure",
-      "GetTypeInfo",
-      "GetPackageContents",
-      "GetPackageTree",
-      "GetWhereUsed",
-      "GetProgFullCode",
-      "GetInactiveObjects",
-      "GetSqlQuery",
-      "GetTableContents",
-      "GetObjectsByType",
-      "ActivateObjects",
-      "GetTransport",
-      "ListTransports",
-      "CreateTransport",
-      "GetSession",
-      "RunUnitTest",
-      "GetUnitTest",
-      "GetUnitTestResult",
-      "GetUnitTestStatus",
-      "GetTcodeUsage",
-      "GetJobUsage",
-      "RuntimeListDumps",
-      "RuntimeGetDumpById",
-      "RuntimeAnalyzeDump",
-      "*Program",
-      "*Include",
-      "*Class",
-      "*Interface",
-      "*FunctionGroup",
-      "*FunctionModule",
-      "*Table",
-      "*Structure",
-      "*DataElement",
-      "*Domain",
-      "*View",
-      "*MetadataExtension",
-      "*BehaviorDefinition",
-      "*BehaviorImplementation",
-      "*ServiceDefinition",
-      "*ServiceBinding",
-      "*Screen",
-      "*GuiStatus",
-      "*TextElement"
-    ],
-    "deny": [
-      "Handler*"
-    ]
+    "expose": "core",
+    "allow": [],
+    "deny": []
   },
 
   "systems": [

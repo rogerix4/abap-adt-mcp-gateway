@@ -18,26 +18,33 @@ configuration is layered, how to connect a new SAP system, and what to do with `
 ## Process model
 
 ```
-MCP client ──stdio──▶ dist/bin.js ──HTTPS──▶ <system>/sap/bc/adt        (everything ADT exposes)
-                                  └─SOAP──▶ <system>/sap/bc/soap/rfc   (only the bridge actions)
+MCP client ──stdio──▶ dist/bin.js ──┬──HTTPS──▶ <system A>/sap/bc/adt          each system: one AdtSession
+                                    ├──HTTPS──▶ <system B>/sap/bc/adt          (all alive at once)
+                                    ├──HTTPS──▶ <system C>/sap/bc/adt
+                                    └──SOAP───▶ <same system>/sap/bc/soap/rfc   bridge actions only
 ```
 
 - **One process.** No child servers, no external engine, no patch layer. Changing behaviour
   means changing `src/` and rebuilding.
-- **One `AdtSession` per system, reused for the life of the process.** A lock handle is only
-  valid in the session that created it, which is why `Lock*Low` and the `Update*Low` that
-  follows it land in the same session.
+- **Every configured system is online at the same time.** Each has its own `AdtSession` with its
+  own cookies, CSRF token, ABAP session id and pinned client, reused for the life of the
+  process; there is no "active system" to switch and no re-logon when the target changes. A lock
+  handle is only valid in the session that created it, which is why `Lock*Low` and the
+  `Update*Low` that follows it land in the same session.
 - **Writes to one system are serialised, reads are not.** Two writes interleaved in the same
-  stateful session can leave one of them holding an unreleased lock.
-- **The contract is fixed at 335 tools.** The list does not change after `initialize`. A tool
-  whose server-side surface does not exist answers `NOT_IMPLEMENTED` with the reason; it never
-  fakes a success.
-- **Every tool takes an extra `system` argument.** Omitted means `defaultSystem`. If the
-  default system cannot support that tool the call fails — it does not silently switch to
-  another system.
-- **A name that resolves differently per system is hidden.** If two systems define the same
-  tool name with a different description, schema or annotations, the gateway hides it and
-  refuses `GatewayCallTool` for it; `GatewayListTools` reports the conflict.
+  stateful session can leave one of them holding an unreleased lock; writes to *different*
+  systems have separate queues and do not wait for each other. A slow system slows only its own
+  writes.
+- **`ReloadProfile` is the one global operation.** It re-reads the configuration and rebuilds
+  every session, so calls in flight to any system fail and have to be retried.
+- **The contract is fixed at 335 tools.** The list does not change after `initialize`, and it is
+  the same list for every system. A tool whose server-side surface does not exist answers
+  `NOT_IMPLEMENTED` with the reason; it never fakes a success, and it never substitutes another
+  system's answer.
+- **Every tool takes an extra `system` argument.** With one system configured it may be omitted.
+  With several it is required: omitting it answers `SYSTEM_UNKNOWN` with the valid ids instead
+  of picking one. `defaultSystem` only shapes the tool descriptions and the
+  `GatewayListSystems` answer — it does not make `system` optional and never redirects a call.
 - **Tool names are matched bare** (`GetProgram`, `ActivateObjects`). Any prefix a client
   displays is added by the client and is not part of the judgement.
 
@@ -65,6 +72,9 @@ sessionId, needsWrite)`:
   turn a production system writable.
 - **`needsWrite` comes from the request semantics** (method ≠ GET, or a write-class bridge
   action), never from whether a tool *looks* read-only.
+- **The tier belongs to the system, not to the process.** One conversation can read a `prd`
+  system and write a `dev` system; every call is judged against its own target, so a read-only
+  system never blocks work on a writable one.
 - `toolPolicy` does **not** participate. Hiding a tool is visibility; the tier is the boundary.
 
 ## Configuration layers
@@ -95,24 +105,37 @@ One system is one entry in `systems[]`:
 }
 ```
 
-See [CONFIGURATION.md](CONFIGURATION.md) for every field.
+See [CONFIGURATION.md](CONFIGURATION.md) for every field. Add more entries and they are all
+live at once: `systems` merges by `id` across layers, and nothing is switched at runtime — see
+[ARCHITECTURE.md](ARCHITECTURE.md#multi-system-concurrency).
 
 ## Advertised surface (`toolPolicy`)
 
 | Key | Effect |
 |---|---|
-| `layers` | `readonly` / `write` / `low`; all three by default |
-| `allow` / `deny` | glob patterns; `allow` keeps only matches, `deny` removes afterwards |
-| `gateway` | on by default — additionally advertises `GatewayListSystems`, `GatewayListTools`, `GatewayCallTool` |
+| `expose` | one level: `none` · `gateway` (default) · `readonly` `write` `low` · `high` · `full` · `core` |
+| `allow` / `deny` | glob patterns on top: `allow` keeps only matches, `deny` removes afterwards |
 
-- `layers: []` with `gateway: true` advertises three tools while all 335 stay reachable by
-  name (the shape to use when the client's tool budget is small).
-- Presets: `node tools/scripts/tool-presets.mjs --preset core|full|readonly|high|gateway`;
-  `--check` reports the count.
-- **`layers` / `allow` / `deny` are not an authorisation boundary.** They filter `tools/list`
+| Level | Advertised | Level | Advertised |
+|---|---|---|---|
+| `none` | 0 | `high` | 201 |
+| `gateway` (default) | 3 — `full`, as three tools: all 335 reachable | `full` | 335 |
+| `readonly` | 115 | `core` | 127 (124 + 3 facade) |
+| `write` | 86 | | |
+| `low` | 134 | | |
+
+- `gateway` is `full` compressed — the whole contract reachable through three tools. `core` is
+  the curated level that fits a 128-tool budget. The level table and counts live in one place:
+  `node tools/scripts/tool-presets.mjs`.
+- `allow` can only narrow the level, never widen it (the curated set behind `core` is a level
+  rule, not an `allow` list); `deny` is applied last.
+- **`expose` / `allow` / `deny` are not an authorisation boundary.** They filter `tools/list`
   only; a hidden tool can still be called by bare name or through `GatewayCallTool`. The
   boundary is the tier.
-- The startup banner states what is exposed: `exposing 3 of 335 tools (layers: none, gateway tools)`.
+- The startup banner states what is exposed: `exposing 127 tools (expose: core, 124 named + 3 gateway)`.
+- A configuration still on the old `layers` / `gateway` keys starts and is mapped onto the
+  nearest level; the notice on stderr names the level and what changed
+  ([CONFIGURATION](CONFIGURATION.md#5-toolpolicyexpose-and-its-patterns-are-not-authorisation)).
 
 ## Lock journal
 
@@ -146,6 +169,14 @@ not have to wait for `SM12` or a session timeout.
    a remote-enabled module cannot take reference parameters.
 6. **SOAP prerequisites**: the ICF node `/sap/bc/soap/rfc` must be reachable and the module must
    be remote-enabled — an un-enabled module answers HTTP 500.
+7. **The advertised system list is fixed at startup.** The `system` argument carries an `enum`,
+   a description and a `GatewayListSystems` answer built from the configuration the process
+   started with, so a system added to the file answers `SYSTEM_UNKNOWN` until the gateway is
+   restarted. `ReloadProfile` rebuilds the *sessions* — and closes all of them, so in-flight
+   calls to any system fail and have to be retried — after which the new id is accepted, but the
+   enum, the description and `GatewayListSystems` still show the startup set. Restart after
+   changing the system list. Adding one does not touch the other systems' tier, write queue,
+   bridge modules or lock journal file.
 
 Bridge troubleshooting is in [TROUBLESHOOTING.md](TROUBLESHOOTING.md) and the module list is in
 [`../abap/README.md`](../abap/README.md).

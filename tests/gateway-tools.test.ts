@@ -12,7 +12,7 @@ import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { createRegistry } from "../src/engine/create-registry.ts";
-import { compileToolFilter } from "../src/engine/tool-filter.ts";
+import { compileExpose } from "../src/engine/expose.ts";
 import { createGatewayServer } from "../src/mcp/server.ts";
 import { GATEWAY_TOOL_NAMES } from "../src/mcp/gateway-tools.ts";
 
@@ -37,13 +37,12 @@ const connect = async (info: Parameters<typeof createGatewayServer>[0]["info"], 
 };
 
 describe("gateway facade", () => {
-  it("advertises three tools and hides the contract when every layer is off", async () => {
+  it("advertises three tools and hides the contract when every switch is off", async () => {
     const { client } = await connect({
       name: "abap-adt-mcp-gateway",
       version: "0.0.0",
       systems: ["dev"],
-      gateway: true,
-      toolFilter: { layers: [] },
+      expose: { level: "gateway" },
     });
     const { tools } = await client.listTools();
     expect(tools.map((tool) => tool.name)).toEqual([...GATEWAY_TOOL_NAMES]);
@@ -55,8 +54,7 @@ describe("gateway facade", () => {
       version: "0.0.0",
       systems: ["dev", "qas"],
       defaultSystem: "dev",
-      gateway: true,
-      toolFilter: { layers: [] },
+      expose: { level: "gateway" },
     });
     const result = await client.callTool({ name: "GatewayListSystems", arguments: {} });
     const payload = JSON.parse((result.content as Array<{ text: string }>)[0]!.text) as {
@@ -71,8 +69,7 @@ describe("gateway facade", () => {
       name: "abap-adt-mcp-gateway",
       version: "0.0.0",
       systems: ["dev"],
-      gateway: true,
-      toolFilter: { layers: [] },
+      expose: { level: "gateway" },
     });
     const result = await client.callTool({ name: "GatewayListTools", arguments: { query: "sql query" } });
     const payload = JSON.parse((result.content as Array<{ text: string }>)[0]!.text) as { tools: string[] };
@@ -89,8 +86,7 @@ describe("gateway facade", () => {
       name: "abap-adt-mcp-gateway",
       version: "0.0.0",
       systems: ["dev"],
-      gateway: true,
-      toolFilter: { layers: [] },
+      expose: { level: "gateway" },
     });
     const result = await client.callTool({ name: "GatewayListTools", arguments: { tool: "UpdateProgram", detail: "schema" } });
     const payload = JSON.parse((result.content as Array<{ text: string }>)[0]!.text) as {
@@ -108,8 +104,7 @@ describe("gateway facade", () => {
         name: "abap-adt-mcp-gateway",
         version: "0.0.0",
         systems: ["dev"],
-        gateway: true,
-        toolFilter: { layers: [] },
+        expose: { level: "gateway" },
       },
       {
         GetProgram: ((args: Record<string, unknown>) => {
@@ -133,8 +128,7 @@ describe("gateway facade", () => {
       name: "abap-adt-mcp-gateway",
       version: "0.0.0",
       systems: ["dev"],
-      gateway: true,
-      toolFilter: { layers: [] },
+      expose: { level: "gateway" },
     });
 
     const unknown = await client.callTool({ name: "GatewayCallTool", arguments: { tool: "NoSuchTool" } });
@@ -150,7 +144,7 @@ describe("gateway facade", () => {
       name: "abap-adt-mcp-gateway",
       version: "0.0.0",
       systems: ["dev"],
-      toolFilter: {},
+      expose: { level: "full" },
     });
     const { tools } = await client.listTools();
     expect(tools.some((tool) => tool.name.startsWith("Gateway"))).toBe(false);
@@ -159,7 +153,7 @@ describe("gateway facade", () => {
 
 describe("layered filter used by the facade", () => {
   it("drops every layer when the list is empty", () => {
-    const visible = compileToolFilter({ layers: [] }, () => ({ effect: "read" }));
+    const visible = compileExpose({ level: "none" }, () => ({ effect: "read" }));
     expect(visible("GetProgram")).toBe(false);
   });
 });

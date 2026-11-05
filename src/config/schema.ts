@@ -101,6 +101,21 @@ export const SystemSchema = z.object({
   env: z.record(z.string()).default({}),
 });
 
+/**
+ * What this process advertises: one level, then two pattern lists on top of it.
+ * `expose` picks a whole set; `allow` keeps only matches; `deny` removes matches last.
+ */
+export const ExposeLevelSchema = z.enum([
+  "none",
+  "gateway",
+  "readonly",
+  "write",
+  "low",
+  "high",
+  "full",
+  "core",
+]);
+
 /** A configuration layer. Every field is optional: layers override, they do not restate. */
 export const ConfigPatchSchema = z.object({
   $schema: z.string().optional(),
@@ -114,9 +129,15 @@ export const ConfigPatchSchema = z.object({
   toolPolicy: z
     .object({
       timeoutMs: z.number().int().positive().optional(),
-      layers: z.array(z.enum(["readonly", "write", "low"])).optional(),
+      expose: ExposeLevelSchema.optional(),
       allow: z.array(z.string().min(1)).optional(),
       deny: z.array(z.string().min(1)).optional(),
+      /**
+       * Deprecated, mapped into `expose` while the layer loads (`config/load.ts`) so the
+       * merge only ever sees the new shape. Kept in the patch schema — not the effective
+       * one — so an existing configuration still starts.
+       */
+      layers: z.array(z.enum(["readonly", "write", "low"])).optional(),
       gateway: z.boolean().optional(),
     })
     .optional(),
@@ -132,10 +153,9 @@ export const EffectiveConfigSchema = z.object({
   defaultSystem: z.string().optional(),
   toolPolicy: z.object({
     timeoutMs: z.number().int().positive(),
-    layers: z.array(z.enum(["readonly", "write", "low"])),
+    expose: ExposeLevelSchema,
     allow: z.array(z.string()),
     deny: z.array(z.string()),
-    gateway: z.boolean(),
   }),
   systems: z.array(SystemSchema),
 });

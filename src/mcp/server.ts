@@ -24,7 +24,7 @@ import {
 
 import { GatewayError } from "../engine/errors.js";
 import { ToolRegistry } from "../engine/registry.js";
-import { compileToolFilter, type ToolFilter } from "../engine/tool-filter.js";
+import { advertisesFacade, compileExpose, DEFAULT_EXPOSE, type Expose } from "../engine/expose.js";
 import type { ToolEffect, ToolMeta } from "../engine/types.js";
 import { AdtError } from "../adt/errors.js";
 import { callGatewayTool, gatewayToolDefinitions } from "./gateway-tools.js";
@@ -43,22 +43,10 @@ export interface GatewayInfo {
   readonly systems?: readonly string[];
   readonly defaultSystem?: string;
   /**
-   * Which tools to advertise.
-   *
-   * A client passes only a bounded number of tools to the model (some stop at 128), so
-   * a 335-tool list quietly costs the agent whatever did not fit. `layers` / `allow` /
-   * `deny` narrow the advertised list; calls by name still work, and the write boundary
-   * is enforced per call regardless.
+   * What this client is shown: one level plus its narrowings (`toolPolicy.expose`,
+   * `allow`, `deny`). Omitted means `full` — every named tool, nothing hidden.
    */
-  readonly toolFilter?: ToolFilter;
-  /**
-   * Advertise the three facade tools (`GatewayListSystems`, `GatewayListTools`,
-   * `GatewayCallTool`) next to whatever the filter allows.
-   *
-   * With every layer off and gateway mode on, the client sees three tools and can still
-   * reach the whole contract — the shape to use when the client's budget is small.
-   */
-  readonly gateway?: boolean;
+  readonly expose?: Expose;
 }
 
 export interface GatewayServerOptions {
@@ -94,12 +82,18 @@ function isDestructive(effect: ToolEffect, verb: string): boolean {
 
 function toTool(registry: ToolRegistry, info: GatewayInfo): Tool[] {
   const systems = info.systems ?? [];
-  const filter = info.toolFilter ?? {};
-  const visible = compileToolFilter(filter, (name) => {
+  const expose = info.expose ?? DEFAULT_EXPOSE;
+  const visible = compileExpose(expose, (name) => {
     const meta = registry.get(name)?.meta;
     return meta === undefined ? undefined : { effect: meta.effect === "write" ? "write" : "read" };
   });
-  const facade = info.gateway === true ? gatewayToolDefinitions({ registry, systems, ...(info.defaultSystem === undefined ? {} : { defaultSystem: info.defaultSystem }) }) : [];
+  const facade = advertisesFacade(expose.level)
+    ? gatewayToolDefinitions({
+        registry,
+        systems,
+        ...(info.defaultSystem === undefined ? {} : { defaultSystem: info.defaultSystem }),
+      })
+    : [];
   return [
     ...facade,
     ...registry
@@ -120,8 +114,9 @@ function toTool(registry: ToolRegistry, info: GatewayInfo): Tool[] {
                 type: "string",
                 ...(systems.length > 1 ? { enum: [...systems] } : {}),
                 description:
-                  `SAP system to use (${systems.join(", ")}). ` +
-                  `Defaults to ${info.defaultSystem ?? systems[0]}.`,
+                  systems.length > 1
+                    ? `SAP system to use (${systems.join(", ")}). Required: ${systems.length} systems are configured.`
+                    : `SAP system to use (${systems[0]}). Optional: it is the only configured system.`,
               },
             },
           };

@@ -38,16 +38,18 @@
               "type": "integer",
               "exclusiveMinimum": 0
             },
-            "layers": {
-              "type": "array",
-              "items": {
-                "type": "string",
-                "enum": [
-                  "readonly",
-                  "write",
-                  "low"
-                ]
-              }
+            "expose": {
+              "type": "string",
+              "enum": [
+                "none",
+                "gateway",
+                "readonly",
+                "write",
+                "low",
+                "high",
+                "full",
+                "core"
+              ]
             },
             "allow": {
               "type": "array",
@@ -61,6 +63,17 @@
               "items": {
                 "type": "string",
                 "minLength": 1
+              }
+            },
+            "layers": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "enum": [
+                  "readonly",
+                  "write",
+                  "low"
+                ]
               }
             },
             "gateway": {

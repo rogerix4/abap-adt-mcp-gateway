@@ -20,7 +20,7 @@ client is covered by the [README](README.md) and [docs/USAGE.md](docs/USAGE.md).
 
 | Question | File |
 |---|---|
-| How a call travels, why locks are journalled, how activation is verified | `docs/ARCHITECTURE.md` |
+| How a call travels, how several systems stay online together, why locks are journalled, how activation is verified | `docs/ARCHITECTURE.md` |
 | Write boundary, tiers, configuration layers, onboarding a system | `docs/OPERATIONS.md` |
 | A tool's arguments | `docs/TOOLS.md` (generated) |
 | The ABAP side | `abap/README.md` |

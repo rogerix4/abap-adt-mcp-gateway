@@ -1,97 +1,53 @@
 #!/usr/bin/env node
 /**
- * Prints a curated `toolPolicy` fragment for a bounded tool budget.
+ * Prints the exposure levels and the `toolPolicy` fragment for one of them.
  *
  * Clients hand the model a bounded tool list (some stop at 128), so a 335-tool server
- * costs the agent whatever did not fit. `core` is a practical subset for everyday ABAP
- * work: full create/read/update/delete/check for the object types people actually edit,
- * plus search, activation, transports, data preview and runtime diagnostics. `*Low`
- * tools are left out — they exist for callers that drive the lock themselves.
+ * costs the agent whatever did not fit. `toolPolicy.expose` takes one level; `allow` /
+ * `deny` narrow it. The levels and their curation live in `src/engine/expose.ts` — this
+ * script reads the *built* engine (`dist/engine/expose.js`), so the printed counts cannot
+ * drift from what the server actually advertises.
  *
  * Usage:
- *   node tools/scripts/tool-presets.mjs                        list presets
- *   node tools/scripts/tool-presets.mjs --preset core          JSON fragment for toolPolicy
- *   node tools/scripts/tool-presets.mjs --preset core --check  count what it exposes
+ *   npm run build && node tools/scripts/tool-presets.mjs            list levels
+ *   node tools/scripts/tool-presets.mjs --level core                fragment for toolPolicy
+ *   node tools/scripts/tool-presets.mjs --level core --check        count what it advertises
  */
 
-import { readFileSync } from "node:fs";
-import { join } from "node:path";
+const load = async (path) => {
+  try {
+    return await import(new URL(path, import.meta.url).href);
+  } catch (error) {
+    if (error?.code !== "ERR_MODULE_NOT_FOUND") throw error;
+    process.stderr.write(
+      "tool-presets: dist/ is missing — run `npm run build` first (this script reads the built engine so the\n" +
+        "counts match the server instead of a second copy of the level table).\n",
+    );
+    process.exit(2);
+  }
+};
 
-const ROOT = process.cwd();
-const catalog = JSON.parse(readFileSync(join(ROOT, "tools", "catalog.json"), "utf8"));
-const names = new Set(catalog.tools.map((tool) => tool.name));
+const { createRegistry } = await load("../../dist/engine/create-registry.js");
+const { advertisesFacade, compileExpose, EXPOSE_LEVELS } = await load("../../dist/engine/expose.js");
 
-/** Object types an ABAP developer edits in a normal week. */
-const CORE_SUBJECTS = [
-  "Program",
-  "Include",
-  "Class",
-  "Interface",
-  "FunctionGroup",
-  "FunctionModule",
-  "Table",
-  "Structure",
-  "DataElement",
-  "Domain",
-  "View",
-  "MetadataExtension",
-  "BehaviorDefinition",
-  "BehaviorImplementation",
-  "ServiceDefinition",
-  "ServiceBinding",
-  "Screen",
-  "GuiStatus",
-  "TextElement",
-];
+const registry = createRegistry();
+const shapeOf = (name) => {
+  const meta = registry.get(name)?.meta;
+  return meta === undefined ? undefined : { effect: meta.effect === "write" ? "write" : "read" };
+};
 
-/** Tools whose subject is not an object type but that the work needs. */
-const CORE_EXTRAS = [
-  "SearchObject",
-  "GetObjectInfo",
-  "GetObjectStructure",
-  "GetTypeInfo",
-  "GetPackageContents",
-  "GetPackageTree",
-  "GetWhereUsed",
-  "GetProgFullCode",
-  "GetInactiveObjects",
-  "GetSqlQuery",
-  "GetTableContents",
-  "GetObjectsByType",
-  "ActivateObjects",
-  "GetTransport",
-  "ListTransports",
-  "CreateTransport",
-  "GetSession",
-  "RunUnitTest",
-  "GetUnitTest",
-  "GetUnitTestResult",
-  "GetUnitTestStatus",
-  "GetTcodeUsage",
-  "GetJobUsage",
-  "RuntimeListDumps",
-  "RuntimeGetDumpById",
-  "RuntimeAnalyzeDump",
-];
-
-const PRESETS = {
-  full: () => ({ gateway: false, layers: ["readonly", "write", "low"], allow: [], deny: [] }),
-  /** Three tools, the whole contract reachable: the compact shape for a small budget. */
-  gateway: () => ({ gateway: true, layers: [], allow: [], deny: [] }),
-  /** Reads only, named: safe to hand to an agent that should never touch a system. */
-  readonly: () => ({ gateway: false, layers: ["readonly"], allow: [], deny: [] }),
-  /** Everything a caller needs without owning locks: reads and writes, no `*Low`. */
-  high: () => ({ gateway: false, layers: ["readonly", "write"], allow: [], deny: [] }),
-  core: () => ({
-    gateway: true,
-    layers: ["readonly", "write"],
-    allow: [
-      ...CORE_EXTRAS.filter((name) => names.has(name)),
-      ...CORE_SUBJECTS.map((subject) => `*${subject}`),
-    ],
-    // `*View` also catches the dump / profiler handler tools, which are not object views.
-    deny: ["Handler*"],
-  }),
+const count = (level) => {
+  const visible = compileExpose({ level }, shapeOf);
+  const named = registry.list().filter((entry) => visible(entry.definition.name));
+  const facade = advertisesFacade(level) ? 3 : 0;
+  return {
+    named: named.length,
+    facade,
+    advertised: named.length + facade,
+    // Counted by the same decision the server makes, not by a verb pattern.
+    writes: named.filter((entry) => entry.meta.effect === "write").length,
+    low: named.filter((entry) => entry.meta.layer === "low").length,
+  };
 };
 
 const arg = (name, fallback) => {
@@ -99,52 +55,44 @@ const arg = (name, fallback) => {
   return index === -1 ? fallback : process.argv[index + 1];
 };
 
-const toRegex = (glob) =>
-  new RegExp(`^${glob.replace(/[.+^${}()|[\]\\]/g, "\\$&").replace(/\*/g, ".*")}$`, "i");
+const level = arg("--level", arg("--preset", undefined));
+const check = process.argv.includes("--check");
 
-const preset = arg("--preset", undefined);
-if (preset === undefined) {
-  console.log("presets:");
-  console.log("  full       all 335 tools, named (readonly + write + low)");
-  console.log("  gateway    three facade tools; the whole contract stays reachable by name");
-  console.log("  readonly   reads only, named");
-  console.log("  high       reads and writes, no *Low tools");
-  console.log("  core       curated subset plus the facade (fits a 128-tool budget)");
+if (level === undefined) {
+  console.log("exposure levels (toolPolicy.expose):");
+  for (const name of EXPOSE_LEVELS) {
+    const { named, facade, advertised } = count(name);
+    let tail = "";
+    if (name === "gateway") {
+      // Not "0 tools": this is `full`, advertised as three tools instead of 335.
+      tail = ` = full, as ${advertised} tools (all ${registry.list().length} reachable by name)`;
+    } else if (facade > 0) {
+      tail = ` = ${named} named + ${facade} gateway`;
+    }
+    console.log(`  ${String(name).padEnd(9)} ${String(advertised).padStart(3)} advertised${tail}`);
+  }
+  console.log("\nfits a 128-tool budget: core (127)");
+  console.log("usage: --level <name> [--check]");
   process.exit(0);
 }
 
-const build = PRESETS[preset];
-if (build === undefined) {
-  process.stderr.write(`tool-presets: unknown preset "${preset}" (have: ${Object.keys(PRESETS).join(", ")})\n`);
+if (!EXPOSE_LEVELS.includes(level)) {
+  process.stderr.write(`tool-presets: unknown level "${level}" (have: ${EXPOSE_LEVELS.join(", ")})\n`);
   process.exit(2);
 }
 
-const { gateway, layers, allow, deny } = build();
-const allowers = allow.map(toRegex);
-const denyers = deny.map(toRegex);
-// Effect is not in the catalog; layer filtering by `write` is approximated by the verb,
-// which is what the registry derives its effect from as well.
-const WRITE_VERBS = /^(Create|Update|Delete|Activate|Release|Patch)/;
-const exposed = catalog.tools
-  .map((tool) => tool.name)
-  .filter((name) => {
-    if (/Low$/.test(name) && !layers.includes("low")) return false;
-    const writes = WRITE_VERBS.test(name);
-    if (writes && !layers.includes("write")) return false;
-    if (!writes && !layers.includes("readonly")) return false;
-    if (allowers.length > 0 && !allowers.some((pattern) => pattern.test(name))) return false;
-    return !denyers.some((pattern) => pattern.test(name));
-  });
-
-if (process.argv.includes("--check")) {
-  const low = exposed.filter((name) => /Low$/.test(name));
-  const writes = exposed.filter((name) => WRITE_VERBS.test(name));
-  const advertised = exposed.length + (gateway ? 3 : 0);
-  console.log(`preset ${preset}: ${advertised} tools advertised, ${catalog.count} in the contract`);
-  console.log(`  named: ${exposed.length}${gateway ? " + 3 facade tools (Gateway*)" : ""}`);
-  console.log(`  layers: ${layers.join("+") || "none"}${gateway ? ", gateway" : ""}`);
-  console.log(`  write tools: ${writes.length}, low-level tools: ${low.length}`);
-  console.log(`  fits a 128-tool budget: ${advertised <= 128}`);
+const totals = count(level);
+if (check) {
+  const contract = registry.list().length;
+  console.log(`level ${level}: ${totals.advertised} tools advertised, ${contract} in the contract`);
+  if (totals.named === 0 && totals.facade > 0) {
+    console.log(`  all ${contract} tools reachable through the 3 Gateway* tools (this is "full", compressed)`);
+  } else {
+    console.log(`  named: ${totals.named}${totals.facade > 0 ? " + 3 facade tools (Gateway*)" : ""}`);
+  }
+  console.log(`  write tools: ${totals.writes}, low-level tools: ${totals.low}`);
+  console.log(`  fits a 128-tool budget: ${totals.advertised <= 128}`);
 } else {
-  console.log(JSON.stringify({ gateway, layers, allow, deny }, null, 2));
+  // Paste-ready: `allow` / `deny` keep their place next to the level.
+  console.log(JSON.stringify({ expose: level, allow: [], deny: [] }, null, 2));
 }

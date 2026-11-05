@@ -5,6 +5,53 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.0] - 2026-11-05
+
+### Changed
+
+- **`toolPolicy` takes one exposure level.** `layers: [...]` and `gateway: true|false` are
+  replaced by `expose: "<level>"` — `none`, `gateway` (default), `readonly`, `write`, `low`,
+  `high`, `full`, `core` — with `allow` and `deny` applied on top of the chosen level: `allow`
+  keeps only matches, `deny` removes matches afterwards. The advertised size of each level is
+  0, 3, 115, 86, 134, 201, 335 and 127 respectively, and every level is a complete description
+  of what a client sees.
+- **Default level is `gateway`.** Three tools reach the whole 335-tool contract by name, which
+  fits clients that cap the tool budget. `"expose": "full"` advertises the contract itself.
+- **The `Gateway*` facade is part of the level, not a separate switch.** `gateway` is `full`
+  advertised as three tools; `core` advertises the facade in addition to its curated set
+  because that level narrows the list; the remaining levels advertise no facade. Hidden tools
+  remain callable by name and through `GatewayCallTool`; neither path bypasses the tier check.
+- **Each tool has exactly one kind**, with `*Low` as a kind of its own: 115 `readonly`, 86
+  `write`, 134 `low`. The levels are compositions of these kinds, so their sizes sum to 335.
+  This also corrects the counts the previous preset script reported (124 / 77): it classified
+  tools by verb prefix while the registry classifies by effect, which misplaced nine tools
+  (`Handler*`, `WriteTextElementsBulk`, `RuntimeCreateProfilerTraceParameters`).
+- **`tool-presets.mjs` reads the built engine** (`dist/engine/expose.js` and
+  `dist/engine/create-registry.js`), so the level table and the printed counts come from the
+  same code the server runs. `--level` is the argument; `--preset` is still accepted.
+- **The `system` argument description states the actual requirement**: required when several
+  systems are configured, optional when exactly one is. The previous text described a default
+  for the multi-system case, which `runtime.resolve` does not apply.
+- `docs/OPERATIONS.md` stated that an omitted `system` falls back to `defaultSystem`; with
+  several systems configured it is required, as `docs/USAGE.md` and `runtime.resolve` specify.
+- `README` §Architecture and `docs/ARCHITECTURE.md` now describe the multi-system model: every
+  configured system keeps a live ADT session, reads are never queued, and writes queue per
+  system.
+
+### Added
+
+- **`tests/expose.test.ts`**: pins the advertised size of every level, the kind partition, the
+  rule that `allow` narrows but cannot widen a level's own curation, and which levels carry the
+  facade.
+- **Write-concurrency tests for several systems** in `tests/contract.test.ts`: writes to
+  different systems overlap, and two writes to the same system are serialised.
+
+### Deprecated
+
+- `toolPolicy.layers` and `toolPolicy.gateway` are still accepted. They are mapped onto the
+  nearest level, and a message on stderr names the level that was applied and any difference
+  (`docs/CONFIGURATION.md` §5 documents the mapping).
+
 ## [0.2.0] - 2026-11-05
 
 ### Added

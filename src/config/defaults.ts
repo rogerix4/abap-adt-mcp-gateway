@@ -31,7 +31,11 @@ export const defaultConfig = (): EffectiveConfig => ({
   },
   toolPolicy: {
     timeoutMs: 180_000,
-    layers: ["readonly", "write", "low"],
+    // One level picks the advertised set. `gateway` is the default because a client passes
+    // a bounded list to the model (some stop at 128), and three tools that reach the whole
+    // contract cost nothing: `full` is one argument away
+    // (`src/engine/expose.ts` has every level and its count).
+    expose: "gateway",
     allow: [],
     // Hidden, not deleted: ADT has no PUT and no DELETE on `/abapunit/runs/{id}` — measured
     // 2026-11-05, both answer "405 Resource controller does not support method …" (the
@@ -39,9 +43,6 @@ export const defaultConfig = (): EffectiveConfig => ({
     // fail is not worth a slot in the model's budget; it stays callable by name and answers
     // with that reason, so nothing is lost for a caller that insists.
     deny: ["UpdateUnitTest", "DeleteUnitTest"],
-    // On by default: three facade tools cost a client almost nothing, and they are the
-    // only way back to a tool its budget dropped. This adds tools — it hides none.
-    gateway: true,
   },
   systems: [],
 });

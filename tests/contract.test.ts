@@ -127,7 +127,8 @@ describe("MCP surface", () => {
     const registry = createRegistry();
     const server = createGatewayServer({
       registry,
-      info: { name: packageJson.name, version: VERSION },
+      // The default level is `gateway`; this test is about the contract itself.
+      info: { name: packageJson.name, version: VERSION, expose: { level: "full" } },
       log: () => {},
     });
 
@@ -211,18 +212,24 @@ describe("write serialization", () => {
   /**
    * One ADT session per system is stateful. Two writes in flight against the same
    * system interleave LOCK and UNLOCK, and the loser is left holding a lock it never
-   * released — the failure this gateway was rebuilt to remove. Reads are free to overlap.
+   * released — the failure this gateway was rebuilt to remove. Reads are free to overlap,
+   * and so are writes to *different* systems: each one has its own queue.
    */
-  const harness = async () => {
+  const harness = async (systems: readonly string[] = ["a"]) => {
     const registry = createRegistry();
     const writeTool = registry.list().find((entry) => entry.meta.effect === "write")!;
     const readTool = registry.list().find((entry) => entry.meta.effect === "read")!;
     const order: string[] = [];
 
-    const slow = (label: string) => async () => {
-      order.push(`${label}:start`);
+    /**
+     * Records `label:system:start` / `label:system:end`, so a test can tell a queue that
+     * is per system from one that is global.
+     */
+    const slow = (label: string) => async (args: Record<string, unknown>) => {
+      const tag = `${label}:${String(args["system"] ?? "-")}`;
+      order.push(`${tag}:start`);
       await new Promise((resolve) => setTimeout(resolve, 10));
-      order.push(`${label}:end`);
+      order.push(`${tag}:end`);
       return { ok: true };
     };
 
@@ -231,7 +238,7 @@ describe("write serialization", () => {
 
     const server = createGatewayServer({
       registry,
-      info: { name: packageJson.name, version: VERSION, systems: ["a"] },
+      info: { name: packageJson.name, version: VERSION, systems },
       log: () => {},
     });
     const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
@@ -246,14 +253,35 @@ describe("write serialization", () => {
     const { client, order, writeTool } = await harness();
     const call = () => client.callTool({ name: writeTool.definition.name, arguments: { system: "a" } });
     await Promise.all([call(), call()]);
-    expect(order).toEqual(["write:start", "write:end", "write:start", "write:end"]);
+    expect(order).toEqual(["write:a:start", "write:a:end", "write:a:start", "write:a:end"]);
   });
 
   it("lets reads overlap", async () => {
     const { client, order, readTool } = await harness();
     const call = () => client.callTool({ name: readTool.definition.name, arguments: { system: "a" } });
     await Promise.all([call(), call()]);
-    expect(order).toEqual(["read:start", "read:start", "read:end", "read:end"]);
+    expect(order).toEqual(["read:a:start", "read:a:start", "read:a:end", "read:a:end"]);
+  });
+
+  it("lets writes to different systems run at the same time", async () => {
+    const { client, order, writeTool } = await harness(["a", "b"]);
+    const call = (system: string) => client.callTool({ name: writeTool.definition.name, arguments: { system } });
+    await Promise.all([call("a"), call("b")]);
+    // Both started before either finished: the second write was not queued behind the first.
+    expect(order.slice(0, 2).sort()).toEqual(["write:a:start", "write:b:start"]);
+    expect(order).toHaveLength(4);
+  });
+
+  it("queues per system, not globally", async () => {
+    const { client, order, writeTool } = await harness(["a", "b"]);
+    const call = (system: string) => client.callTool({ name: writeTool.definition.name, arguments: { system } });
+    await Promise.all([call("a"), call("a"), call("b")]);
+    const firstAEnd = order.indexOf("write:a:end");
+    const secondAStart = order.indexOf("write:a:start", order.indexOf("write:a:start") + 1);
+    // The second write to A waited for the first one…
+    expect(secondAStart).toBeGreaterThan(firstAEnd);
+    // …while B did not wait for either of them.
+    expect(order.indexOf("write:b:start")).toBeLessThan(firstAEnd);
   });
 });
 

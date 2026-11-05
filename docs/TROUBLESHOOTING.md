@@ -58,15 +58,23 @@ A stale process is the usual reason "my changes are not visible": it keeps talki
 
 ## The client says it cannot pass all tools
 
-A client that caps the tool budget reports something like *"the model only supports 128 tools, 247 tools were not provided"*. The contract stays at 335; what the server **advertises** decides what fits. Two shapes, and they combine:
-
-**Gateway mode — a few visible tools, the whole contract reachable.** This is the compact shape:
+A client that caps the tool budget reports something like *"the model only supports 128 tools, 247 tools were not provided"*. The contract stays at 335; what the server **advertises** decides what fits. `toolPolicy.expose` picks one level, and `allow` / `deny` narrow it:
 
 ```jsonc
-"toolPolicy": { "gateway": true, "layers": [], "allow": [], "deny": [] }
+"toolPolicy": { "expose": "gateway", "allow": [], "deny": [] }
 ```
 
-The client sees exactly three tools:
+| Level | Tools | Use when |
+|---|---|---|
+| `gateway` (default) | 3 | `full` in its compressed form: three tools that reach all 335 by name |
+| `core` | 127 | everyday ABAP work — the shape that fits 128 |
+| `readonly` | 115 | the agent should never see a write tool at all |
+| `write` / `low` | 86 / 134 | only write tools, or only the `*Low` variants |
+| `high` | 201 | reads and writes, no `*Low` |
+| `full` | 335 | every named tool listed; no client-side limit |
+| `none` | 0 | diagnose a client without any tools |
+
+**With `gateway`** the client sees exactly three tools:
 
 | Tool | Purpose |
 |---|---|
@@ -76,30 +84,20 @@ The client sees exactly three tools:
 
 Verified end to end: with this config `tools/list` returns 3 tools, and `GatewayCallTool` fetched a 9 KB program from a real system.
 
-**List mode — advertise a curated subset by name.** Useful when the agent should see the common tools directly and fall back to the facade for the rest:
+**Narrowing a level** — `allow` keeps only matches, `deny` removes afterwards, and neither can widen the level:
 
 ```jsonc
 "toolPolicy": {
-  "gateway": true,
-  "layers": ["readonly", "write"],
+  "expose": "high",
   "allow": ["SearchObject", "*Program", "*Class", "GetSqlQuery", "ActivateObjects"],
   "deny": ["*Low"]
 }
 ```
 
-Layers alone, for reference:
-
-| `toolPolicy.layers` | Tools |
-|---|---|
-| `[]` | 0 (facade only, when `gateway` is on) |
-| `["readonly"]` | 124 |
-| `["readonly", "write"]` | 201 |
-| `["readonly", "write", "low"]` (default) | 335 |
-
-- Patterns are case-insensitive globs; `allow` non-empty ⇒ only matches survive, `deny` removes afterwards.
+- Patterns are case-insensitive globs; `allow` non-empty ⇒ only matches survive.
 - Visibility only: a hidden tool can still be called — through `GatewayCallTool`, or directly by name. The write boundary is enforced per call either way.
-- Ready-made: `node tools/scripts/tool-presets.mjs` lists `full`, `readonly`, `high`, `core`, `gateway`; `--check` prints the count and whether it fits 128.
-- The startup banner states the truth: `exposing 3 of 335 tools (layers: none, gateway tools)`.
+- Ready-made: `node tools/scripts/tool-presets.mjs` lists every level with its size; `--level core --check` prints the count and whether it fits 128.
+- The startup banner states the truth: `exposing 127 tools (expose: core, 124 named + 3 gateway)`.
 
 **If it still says 335**, the running process does not see your configuration: check `npm run status` for a stale process and look for `no systems configured` in the client's MCP log — that pair means the server was started with a working directory that has no config and could not find one next to the package either.
 

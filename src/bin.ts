@@ -10,7 +10,7 @@
 import { ConfigError, loadConfig, type CliOverrides } from "./config/load.js";
 import { resolveSystemSecrets } from "./config/secrets.js";
 import { createRegistry } from "./engine/create-registry.js";
-import { compileToolFilter } from "./engine/tool-filter.js";
+import { advertisesFacade, compileExpose, type Expose } from "./engine/expose.js";
 import { registerFamilies } from "./families/index.js";
 import { serveStdio } from "./mcp/server.js";
 import { GatewayRuntime } from "./runtime.js";
@@ -111,7 +111,10 @@ async function main(): Promise<void> {
     case "serve": {
       let config;
       try {
-        config = loadConfig({ cli: options.overrides });
+        config = loadConfig({
+          cli: options.overrides,
+          onWarning: (message) => process.stderr.write(`[${NAME}] warning: ${message}\n`),
+        });
       } catch (error) {
         const message = error instanceof ConfigError ? error.message : String(error);
         process.stderr.write(`[${NAME}] configuration error: ${message}\n`);
@@ -140,28 +143,37 @@ async function main(): Promise<void> {
       // the loader here keeps the runtime free of config knowledge, and a config that no
       // longer parses leaves the working sessions untouched (the runtime loads first, swaps
       // after).
-      runtime.setReloader(async () => resolveSystemSecrets(loadConfig({ cli: options.overrides })));
+      runtime.setReloader(async () =>
+        resolveSystemSecrets(
+          loadConfig({
+            cli: options.overrides,
+            onWarning: (message) => process.stderr.write(`[${NAME}] warning: ${message}\n`),
+          }),
+        ),
+      );
 
       const report = registry.coverage();
       process.stderr.write(`[${NAME}] ${report.implemented}/${report.total} tools implemented\n`);
       process.stderr.write(`[${NAME}] ${describeSystems(config)}\n`);
 
-      const toolFilter = {
-        layers: config.toolPolicy.layers,
+      const expose: Expose = {
+        level: config.toolPolicy.expose,
         allow: config.toolPolicy.allow,
         deny: config.toolPolicy.deny,
       };
-      const visible = compileToolFilter(toolFilter, (name) => {
+      const visible = compileExpose(expose, (name) => {
         const meta = registry.get(name)?.meta;
         return meta === undefined ? undefined : { effect: meta.effect === "write" ? "write" : "read" };
       });
-      const exposed = registry.list().filter((entry) => visible(entry.definition.name)).length;
-      const facade = config.toolPolicy.gateway ? 3 : 0;
+      const named = registry.list().filter((entry) => visible(entry.definition.name)).length;
+      const facade = advertisesFacade(expose.level) ? 3 : 0;
       process.stderr.write(
-        exposed === report.total && facade === 0
-          ? `[${NAME}] exposing all ${exposed} tools; a client that caps the tool budget will drop the rest\n`
-          : `[${NAME}] exposing ${exposed + facade} of ${report.total} tools ` +
-              `(layers: ${config.toolPolicy.layers.join("+") || "none"}${facade > 0 ? ", gateway tools" : ""})\n`,
+        named === 0 && facade > 0
+          ? `[${NAME}] exposing ${facade} gateway tools (expose: ${expose.level}) — all ${report.total} tools reachable by name\n`
+          : named === report.total && facade === 0
+            ? `[${NAME}] exposing all ${named} tools; a client that caps the tool budget will drop the rest\n`
+            : `[${NAME}] exposing ${named + facade} tools ` +
+                `(expose: ${expose.level}, ${named} named${facade > 0 ? " + 3 gateway" : ""})\n`,
       );
 
       await serveStdio({
@@ -171,8 +183,7 @@ async function main(): Promise<void> {
           version: VERSION,
           systems: config.systems.map((system) => system.id),
           ...(config.defaultSystem === undefined ? {} : { defaultSystem: config.defaultSystem }),
-          toolFilter,
-          gateway: config.toolPolicy.gateway,
+          expose,
         },
       });
       return;

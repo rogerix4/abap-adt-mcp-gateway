@@ -46,10 +46,9 @@ After changing the schema, run `npm run gen:schema`. `npm run verify` checks it 
 
   "toolPolicy": {
     "timeoutMs": 180000,                 // per ADT request
-    "layers": ["readonly", "write", "low"],  // which kinds of tool exist; all three default
-    "allow": [],                          // glob patterns; empty = everything the layers allow
-    "deny": [],                           // removed after `allow`
-    "gateway": true                       // three Gateway* tools, full reach by name (default on)
+    "expose": "gateway",                 // one level; see §5 for the eight and their sizes
+    "allow": [],                          // keep only matching tools (globs), on top of the level
+    "deny": ["UpdateUnitTest", "DeleteUnitTest"]  // then remove matches (default shown)
   },
 
   "systems": [
@@ -93,22 +92,41 @@ A system `id` is the value clients pass as `system`, and the value scripts take 
 - The keychain needs the optional dependency `@napi-rs/keyring`.
 - A keychain that cannot be read does not stop the server: tools are registered and calls answer "credentials could not be resolved", which is easier to diagnose than a server that refuses to start.
 
-## 5 `toolPolicy` layers and patterns are not authorisation
+## 5 `toolPolicy.expose` and its patterns are not authorisation
 
-`layers` / `allow` / `deny` only affect the tool list a client sees. They do not block calls. The real boundary is `tier`:
+`expose` / `allow` / `deny` only affect the tool list a client sees. They do not block calls. The real boundary is `tier`:
 
 - Any write against a non-`dev` system is refused by `runtime.resolve(..., needsWrite)`, whether or not the tool is visible;
 - "Write" is decided from the request semantics (method ≠ GET, write RFC action), not from how the tool name looks.
 
-| Layer | Adds | With `gateway: false` |
+### The eight levels
+
+Every named tool has exactly one kind, which is what makes the levels add up:
+
+| Kind | What it is | Tools |
 |---|---|---|
-| `readonly` | tools that only read | 124 |
-| `write` | create / update / delete / activate / release / patch | +77 (201) |
-| `low` | the `*Low` variants, where the caller owns the lock | +134 (335) |
+| `readonly` | only reads | 115 |
+| `write` | create / update / delete / activate / release / patch | 86 |
+| `low` | the `*Low` variants, where the caller owns the lock | 134 |
 
-### Gateway mode
+| Level | Made of | Advertised |
+|---|---|---|
+| `none` | nothing | 0 |
+| `gateway` (default) | `full`, advertised as three tools instead of 335: everything stays reachable by name through `GatewayCallTool` | 3 |
+| `readonly` | the `readonly` kind | 115 |
+| `write` | the `write` kind | 86 |
+| `low` | the `low` kind | 134 |
+| `high` | `readonly` + `write` | 201 |
+| `full` | every named tool | 335 |
+| `core` | a curated subset for everyday ABAP work: full lifecycle for the object types people actually edit, plus search, activation, transports, data preview and runtime diagnostics — with the facade, because it narrows the list | 127 (124 + 3) |
 
-`gateway` is on by default. It adds three tools and makes the rest reachable by name:
+`gateway` is `full` compressed — the same reach, three tools. `core` is the one that fits a 128-tool budget. `none` exists for diagnosing a client; it advertises nothing at all.
+
+`allow` then `deny` apply on top: `allow` keeps only matches (so it can only narrow, never widen — including the curated set behind `core`), and `deny` removes matches last.
+
+### The facade
+
+`Gateway*` follows the level, not a switch of its own: `gateway` (three tools) and `core` (curated plus three) advertise it, every other level does not — a level that already advertises everything does not need a way around itself, and a narrow level should not get one either.
 
 | Tool | Purpose |
 |---|---|
@@ -116,15 +134,27 @@ A system `id` is the value clients pass as `system`, and the value scripts take 
 | `GatewayListTools` | search the contract: `pattern`, `verb`, `query`, `layer`, `detail: "names" \| "descriptions" \| "schema"` |
 | `GatewayCallTool` | `{ tool, arguments, system }` — runs any tool, advertised or not |
 
-With `layers: []` that is the whole surface: three tools for a client that budgets its tool list tightly.
-
-They exist because clients pass a bounded tool list to the model (some stop at 128), and a tool the client dropped is a tool the agent silently lost:
+They exist because clients pass a bounded tool list to the model (some stop at 128), and a tool the client dropped is a tool the agent silently lost.
 
 ```bash
-node tools/scripts/tool-presets.mjs                          # list presets
-node tools/scripts/tool-presets.mjs --preset gateway --check  # 3 tools
-node tools/scripts/tool-presets.mjs --preset core --check     # 127 tools
+node tools/scripts/tool-presets.mjs                            # every level and its size
+node tools/scripts/tool-presets.mjs --level core --check        # 127 tools
+node tools/scripts/tool-presets.mjs --level gateway --check     # 3 tools
 ```
+
+### The deprecated `layers` / `gateway`
+
+Write-ups with `layers: [...]` and `gateway: true` still start: they are mapped onto the nearest level and a deprecation notice goes to stderr.
+
+| `layers` | Level |
+|---|---|
+| `["readonly", "write", "low"]` (or omitted) | `full` |
+| `["readonly", "write"]` | `high` |
+| `["readonly"]` / `["write"]` / `["low"]` | the same name |
+| `[]` | `gateway` when `gateway: true`, otherwise `none` |
+| anything else (e.g. `["readonly", "low"]`) | `full`, and the warning says no level matched |
+
+`allow` / `deny` keep their place; only the level is derived.
 
 ## 6 A tier can only get stricter
 

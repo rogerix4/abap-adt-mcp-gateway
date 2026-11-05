@@ -18,6 +18,7 @@ import { fileURLToPath } from "node:url";
 import type { ZodError } from "zod";
 
 import { defaultConfig, userConfigPath } from "./defaults.js";
+import { advertisesFacade, EXPOSE_LEVELS, type ExposeLevel } from "../engine/expose.js";
 import { parseJsonc } from "./jsonc.js";
 import { mergeLayer } from "./merge.js";
 import { ConfigPatchSchema, EffectiveConfigSchema, type EffectiveConfig, type Tier } from "./schema.js";
@@ -47,6 +48,8 @@ export interface LoadConfigOptions {
   /** Overrides the user-level config location (tests, portable installs). */
   readonly userPath?: string;
   readonly readFile?: (path: string) => string | undefined;
+  /** Receives deprecation notices; the server prints them on stderr at startup. */
+  readonly onWarning?: (message: string) => void;
 }
 
 interface Layer {
@@ -92,23 +95,89 @@ function describeIssues(error: ZodError): string[] {
   });
 }
 
-function validateLayer(name: string, data: unknown): Layer {
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+/** The layer sets a level stands for; everything else becomes `full`. */
+const LEGACY_LEVELS: Readonly<Record<string, ExposeLevel>> = {
+  "": "none",
+  readonly: "readonly",
+  write: "write",
+  low: "low",
+  "readonly+write": "high",
+  "readonly+write+low": "full",
+};
+
+/**
+ * Maps the deprecated `toolPolicy.layers` / `toolPolicy.gateway` onto `toolPolicy.expose`.
+ *
+ * Done per layer, before the merge, so the merge only ever sees one shape. `allow` and
+ * `deny` keep their place, so only the level has to be derived. A combination with no
+ * exact level becomes `full` — a superset, because silently dropping tools is the worse
+ * failure — and the warning names what changed.
+ */
+function normaliseToolPolicy(layerName: string, data: Record<string, unknown>, warn: (message: string) => void): void {
+  const policy = data["toolPolicy"];
+  if (!isPlainObject(policy)) return;
+
+  const legacyLayers = policy["layers"];
+  const legacyGateway = policy["gateway"];
+  if (legacyLayers === undefined && legacyGateway === undefined) return;
+
+  const kinds = new Set<string>(
+    Array.isArray(legacyLayers) ? (legacyLayers as string[]) : ["readonly", "write", "low"],
+  );
+  const key = ["readonly", "write", "low"].filter((kind) => kinds.has(kind)).join("+");
+  const level: ExposeLevel =
+    key.length === 0 ? (legacyGateway === true ? "gateway" : "none") : (LEGACY_LEVELS[key] ?? "full");
+
+  policy["expose"] = level;
+  delete policy["layers"];
+  delete policy["gateway"];
+
+  const legacyName = [
+    legacyLayers === undefined ? "" : "toolPolicy.layers",
+    legacyGateway === undefined ? "" : "toolPolicy.gateway",
+  ]
+    .filter((name) => name.length > 0)
+    .join(" / ");
+
+  let note = `"${level}" was used`;
+  if (key.length > 0 && LEGACY_LEVELS[key] === undefined) {
+    note = `no level matches ${key}; "${level}" was used instead (a superset)`;
+  } else if (legacyGateway === false && advertisesFacade(level)) {
+    note = `"${level}" was used; it also advertises the three Gateway* tools, which gateway: false removed`;
+  } else if (legacyGateway === true && !advertisesFacade(level)) {
+    note = `"${level}" was used; it does not advertise the three Gateway* tools (pick "core" or "gateway" for those)`;
+  }
+
+  warn(
+    `${layerName}: ${legacyName} is deprecated and was applied as toolPolicy.expose: ${note}. ` +
+      `Move the setting to toolPolicy.expose (levels: ${EXPOSE_LEVELS.join(", ")}).`,
+  );
+}
+
+function validateLayer(name: string, data: unknown, warn: (message: string) => void): Layer {
   const parsed = ConfigPatchSchema.safeParse(data);
   if (!parsed.success) {
     throw new ConfigError(name, describeIssues(parsed.error));
   }
-  return { name, data: parsed.data as Record<string, unknown> };
+  const patch = parsed.data as Record<string, unknown>;
+  normaliseToolPolicy(name, patch, warn);
+  return { name, data: patch };
 }
 
 function fileLayer(
   name: string,
   path: string,
   readFile: (path: string) => string | undefined,
+  warn: (message: string) => void,
 ): Layer | undefined {
   const text = readFile(path);
   if (text === undefined) return undefined;
   const parsed = parseJsonc(text, `${name} config (${path})`);
-  return validateLayer(`${name} config (${path})`, parsed);
+  return validateLayer(`${name} config (${path})`, parsed, warn);
 }
 
 export function loadConfig(options: LoadConfigOptions = {}): EffectiveConfig {
@@ -116,10 +185,14 @@ export function loadConfig(options: LoadConfigOptions = {}): EffectiveConfig {
   const env = options.env ?? process.env;
   const cli = options.cli ?? {};
   const readFile = options.readFile ?? defaultReadFile;
+  const warnings: string[] = [];
+  const warn = (message: string): void => {
+    warnings.push(message);
+  };
 
-  const layers: Layer[] = [validateLayer("defaults", defaultConfig() as unknown)];
+  const layers: Layer[] = [validateLayer("defaults", defaultConfig() as unknown, warn)];
 
-  const userLayer = fileLayer("user", options.userPath ?? userConfigPath(), readFile);
+  const userLayer = fileLayer("user", options.userPath ?? userConfigPath(), readFile, warn);
   if (userLayer !== undefined) layers.push(userLayer);
 
   // Both names are read: the README tells people to create `adt-mcp.config.jsonc` in the
@@ -142,7 +215,7 @@ export function loadConfig(options: LoadConfigOptions = {}): EffectiveConfig {
     const absolute = resolve(candidate);
     if (seen.has(absolute)) continue;
     seen.add(absolute);
-    const layer = fileLayer("workspace", absolute, readFile);
+    const layer = fileLayer("workspace", absolute, readFile, warn);
     if (layer !== undefined) layers.push(layer);
   }
 
@@ -153,7 +226,7 @@ export function loadConfig(options: LoadConfigOptions = {}): EffectiveConfig {
   if (cliLayer !== undefined) layers.push(cliLayer);
 
   if (cli.configPath !== undefined) {
-    const explicit = fileLayer("--config", resolve(cwd, cli.configPath), readFile);
+    const explicit = fileLayer("--config", resolve(cwd, cli.configPath), readFile, warn);
     if (explicit === undefined) {
       throw new ConfigError("--config", [`file not found: ${resolve(cwd, cli.configPath)}`]);
     }
@@ -173,6 +246,8 @@ export function loadConfig(options: LoadConfigOptions = {}): EffectiveConfig {
   }
 
   assertDefaultSystemExists(effective.data);
+
+  for (const warning of warnings) options.onWarning?.(warning);
 
   return effective.data;
 }
@@ -208,7 +283,7 @@ function environmentLayer(env: NodeJS.ProcessEnv): Layer | undefined {
   if (logLevel !== undefined && logLevel.length > 0) patch["server"] = { logLevel };
 
   if (Object.keys(patch).length === 0) return undefined;
-  return validateLayer("environment", patch);
+  return validateLayer("environment", patch, () => {});
 }
 
 function commandLineLayer(cli: CliOverrides): Layer | undefined {
@@ -218,5 +293,5 @@ function commandLineLayer(cli: CliOverrides): Layer | undefined {
   if (cli.logLevel !== undefined && cli.logLevel.length > 0) patch["server"] = { logLevel: cli.logLevel };
 
   if (Object.keys(patch).length === 0) return undefined;
-  return validateLayer("command line", patch);
+  return validateLayer("command line", patch, () => {});
 }

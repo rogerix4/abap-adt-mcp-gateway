@@ -37,7 +37,7 @@ Argument names are exactly as declared in the tool schema (`program_name`, `tran
 
 ## Gateway mode
 
-With `toolPolicy.gateway` on, three tools stand in front of the contract. They are the way to use a tool that is not in the advertised list, and the whole surface when `layers` is empty.
+`Gateway*` follows the exposure level: `toolPolicy.expose: "gateway"` advertises the three tools and nothing else, `"core"` advertises them next to a curated set, and every other level advertises none. They are the way to use a tool that is not in the advertised list.
 
 ```jsonc
 // 1. which systems do I have?

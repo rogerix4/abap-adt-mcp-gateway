@@ -1,15 +1,16 @@
 /**
- * The gateway facade: a handful of visible tools that reach the whole contract.
+ * The gateway facade: three visible tools that reach the whole contract.
  *
  * A model gets a bounded tool budget, and 335 tools do not fit. Hiding tools solves the
- * budget problem but leaves the agent unable to discover or call them. So the surface has
- * two shapes:
+ * budget problem but leaves the agent unable to discover or call them. So `expose` has two
+ * kinds of level:
  *
- *   list mode    a curated subset is advertised by name (see `tool-filter.ts`)
- *   gateway mode three tools are advertised — list the systems, search the contract, call
- *                any tool by name — and the rest of the contract stays reachable
+ *   named levels  a subset is advertised by name (`readonly` … `full`, `core`)
+ *   `gateway`     three tools are advertised — list the systems, search the contract, call
+ *                 any tool by name — and all 335 stay reachable. It is `full`, compressed.
  *
- * Gateway mode is how a client with a 128-tool ceiling keeps full capability.
+ * The facade is part of those levels (`gateway`, `core`), not a switch of its own; see
+ * `engine/expose.ts`.
  */
 
 import type { Tool } from "@modelcontextprotocol/sdk/types.js";

@@ -58,7 +58,7 @@ others leave to regular expressions are done properly here.
 | **Locks do not get lost** | every lock handle is journalled on disk; a stale handle is released before the next lock on the same object |
 | **A real parser, not a keyword scan** | `GetAbapAST`, `GetAbapSemanticAnalysis` and `GetAbapSystemSymbols` parse with [`@abaplint/core`](https://github.com/abaplint/abaplint); the upstream server's implementations are hand-written regular expressions |
 | **Surfaces ADT forgets** | dynpro screens, CUA GUI statuses, text pools, SmartForms (read / create / delete / render to PDF) run over small remote-enabled ABAP modules shipped in [`abap/`](abap/README.md) |
-| **Small tool budgets** | `toolPolicy` narrows what is *advertised*; `GatewayListSystems` / `GatewayListTools` / `GatewayCallTool` keep all 335 reachable for clients that can only pass a few dozen tools to the model |
+| **Small tool budgets** | `toolPolicy.expose` picks a whole level (`readonly` … `full`, plus the curated `core`), then `allow` / `deny` narrow it; `GatewayListSystems` / `GatewayListTools` / `GatewayCallTool` keep all 335 reachable for clients that can only pass a few dozen tools to the model |
 
 ## Features
 
@@ -141,11 +141,19 @@ Then register the server with your MCP client (see [Client configuration](#clien
   `file:<path>`. A plain-text secret fails startup validation.
 - Layers, lowest first: defaults → user (`%APPDATA%\abap-adt-mcp-gateway\config.jsonc`) →
   workspace → environment → command line. Every layer is validated on its own.
-- `toolPolicy` decides what is *advertised* (visibility, not authorisation). Presets:
+- `toolPolicy` decides what is *advertised* (visibility, not authorisation). One level, then
+  two narrowings — the default `gateway` is `full` compressed to three tools:
+  ```jsonc
+  "toolPolicy": {
+    "expose": "core",     // none | gateway | readonly | write | low | high | full | core
+    "allow": [],          // keep only matches
+    "deny": []            // then remove matches
+  }
+  ```
   ```bash
-  node tools/scripts/tool-presets.mjs --preset gateway    # three tools, whole contract reachable
-  node tools/scripts/tool-presets.mjs --preset core       # 127 of 335
-  node tools/scripts/tool-presets.mjs --preset core --check
+  node tools/scripts/tool-presets.mjs                 # every level and how many tools it advertises
+  node tools/scripts/tool-presets.mjs --level core    # paste-ready fragment (127 tools)
+  node tools/scripts/tool-presets.mjs --level full --check
   ```
 
 Every field is documented in [docs/CONFIGURATION.md](docs/CONFIGURATION.md).
@@ -180,6 +188,11 @@ systems, on stderr.
 - The machine-readable contract: [`tools/catalog.json`](tools/catalog.json)
 - Coverage of the running build: `node dist/bin.js --coverage`
 
+What `tools/list` returns is `toolPolicy.expose`. The default is **`gateway`** — three tools that
+reach all 335 by name, because a client hands the model a bounded list. `"expose": "full"` makes
+the contract itself the list; `"core"` gives 127 curated tools. Every level and its size:
+`node tools/scripts/tool-presets.mjs`.
+
 Two tools are deliberately **not advertised** (`UpdateUnitTest`, `DeleteUnitTest`): ADT has no
 `PUT` and no `DELETE` on `/abapunit/runs/{id}` — both answer HTTP 405. They remain callable by
 name and reply with that reason.
@@ -208,14 +221,50 @@ Details, module by module: [`abap/README.md`](abap/README.md).
 ## Architecture
 
 ```
-MCP client ──stdio──▶ dist/bin.js ──HTTPS──▶ ADT   (/sap/bc/adt)
-                                  └─SOAP──▶ RFC   (/sap/bc/soap/rfc, bridge actions only)
+MCP client ──stdio──▶ dist/bin.js ──┬──HTTPS──▶ "dev"  tier dev  · session sys:dev · writable
+                                    ├──HTTPS──▶ "qa"   tier qa   · session sys:qa
+                                    ├──HTTPS──▶ "prd"  tier prd  · session sys:prd
+                                    └──SOAP───▶ <any of them>/sap/bc/soap/rfc   (bridge actions)
 ```
 
-One process, one ADT session per system, a fixed contract, one write boundary, and a lock
-journal on disk. Read [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the call path, the tool
-contract, activation verification and the trade-offs; [docs/OPERATIONS.md](docs/OPERATIONS.md)
-covers the operator view (sessions, locks, tiers, configuration layers, onboarding a system).
+One process, one fixed contract, one write boundary, one lock journal on disk — and every
+system in `systems[]` online **at the same time**. Three configured systems are three live ADT
+sessions, not one session that gets re-pointed. There is no active system to switch: choosing
+one is an argument on the next call, not a change of state.
+
+**Concurrency is per system, not per process.** Calls to different systems overlap; only two
+writes to the same system queue.
+
+| Two calls in flight | Behaviour |
+|---|---|
+| read A · read B | concurrent — reads are never queued, on any system |
+| read A · write A | concurrent |
+| write A · write B | concurrent — each system has its own write queue |
+| write A · write A | queued — two writes in one stateful session interleave LOCK / UNLOCK and one strands a lock |
+
+A slow or failing system therefore slows **only its own writes**.
+
+**Each system keeps its own session state.** Cookie jar, CSRF token, ABAP session id and the
+pinned client belong to that system alone; using the next system neither resets them nor
+re-points them. `session_id` names its owner (`sys:<id>`), so a `Lock*Low` / `Update*Low` pair
+cannot drift into another system — the mismatch is rejected before SAP sees it.
+
+**Routing is per call.** `system` selects the target of every tool call. With several systems
+configured it is required — omitting it answers `SYSTEM_UNKNOWN` with the valid ids instead of
+picking one silently; with exactly one it may be omitted. `defaultSystem` only shapes the tool
+descriptions and the `GatewayListSystems` answer; it does not make `system` optional, and it
+never redirects a call.
+
+`ReloadProfile` is the one global operation: it re-reads the configuration and rebuilds every
+session, and a file that no longer validates leaves the running sessions untouched. The
+advertised system list itself is fixed at startup, so restart after adding or removing a system.
+Everything else — an expired session, a missing bridge module, a read-only tier — stays inside
+the system that hit it.
+
+Read [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for what is keyed per system (sessions, write
+queues, lock journals, tiers), what stays shared, and the trade-offs;
+[docs/OPERATIONS.md](docs/OPERATIONS.md) covers the operator view (sessions, locks, tiers,
+configuration layers, onboarding a system).
 
 ## Development
 
@@ -251,7 +300,7 @@ Quick pointers, full table in [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md)
 | Symptom | Look at |
 |---|---|
 | The server does not start | startup diagnostics on stderr; credentials must be references, not literals |
-| The client says it cannot pass all tools | use `--preset gateway`, or `toolPolicy.layers: []` |
+| The client says it cannot pass all tools | use `toolPolicy.expose: "core"` (127 tools), or `"gateway"` for three |
 | A write is refused | the target system's tier is not `dev` |
 | An object stays locked | the lock journal under `%LOCALAPPDATA%\abap-adt-mcp-gateway\` |
 | Activation reported, source unchanged | the tool reports `activated` only when the active version matches what was written |
@@ -272,6 +321,11 @@ SmartForms, usage queries). Everything else is pure ADT.
 **Why does `RenderSmartForm` need a printer?** SmartForms formats output through a device type;
 `GETOTF` takes that device from the RFC user's master data. Set one in SU3 (Defaults → Output
 device) — the gateway then renders to PDF without printing.
+
+**Can one server work on several systems at once?** Yes. Every system in `systems[]` is online
+at the same time, each with its own ADT session, and `system` picks the target per call — reads
+anywhere and writes to different systems run concurrently, only two writes to the same system
+queue. With several systems configured, `system` is required.
 
 **Can I use it from HTTP?** No. The transport is stdio on purpose: a smaller attack surface and
 nothing to expose by accident.

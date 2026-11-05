@@ -79,9 +79,10 @@ describe("loading layers", () => {
     expect(config.systems).toEqual([]);
     expect(config.defaultSystem).toBeUndefined();
     expect(config.toolPolicy.timeoutMs).toBeGreaterThan(0);
-    expect(config.toolPolicy.layers).toEqual(["readonly", "write", "low"]);
-    // The three facade tools are on by default: they add reach, they hide nothing.
-    expect(config.toolPolicy.gateway).toBe(true);
+    // `gateway` by default: three tools that reach the whole contract.
+    expect(config.toolPolicy.expose).toBe("gateway");
+    expect(config.toolPolicy.allow).toEqual([]);
+    expect(config.toolPolicy.deny).toEqual(["UpdateUnitTest", "DeleteUnitTest"]);
   });
 
   it("finds the configuration next to the package when the client picks another cwd", () => {
@@ -176,6 +177,57 @@ describe("loading layers", () => {
       }),
     });
     expect(config.toolPolicy.allow).toEqual(["Check*"]);
+  });
+
+  it("maps the deprecated toolPolicy layout onto a level and warns", () => {
+    const warnings: string[] = [];
+    const config = loadConfig({
+      cwd,
+      env: {},
+      userPath,
+      onWarning: (message) => warnings.push(message),
+      readFile: files({
+        [userPath]: JSON.stringify({
+          toolPolicy: { layers: ["readonly", "write"], gateway: false, allow: ["Get*"], deny: ["Handler*"] },
+        }),
+      }),
+    });
+    // readonly + write is `high`; `allow` / `deny` keep their place.
+    expect(config.toolPolicy.expose).toBe("high");
+    expect(config.toolPolicy.allow).toEqual(["Get*"]);
+    expect(config.toolPolicy.deny).toEqual(["Handler*"]);
+    expect(warnings).toHaveLength(1);
+    expect(warnings[0]).toContain("toolPolicy.layers");
+    expect(warnings[0]).toContain('"high"');
+  });
+
+  it("maps a layer combination with no level to `full` and says so", () => {
+    const warnings: string[] = [];
+    const config = loadConfig({
+      cwd,
+      env: {},
+      userPath,
+      onWarning: (message) => warnings.push(message),
+      readFile: files({
+        [userPath]: JSON.stringify({ toolPolicy: { layers: ["readonly", "low"] } }),
+      }),
+    });
+    expect(config.toolPolicy.expose).toBe("full");
+    expect(warnings[0]).toContain("no level matches readonly+low");
+  });
+
+  it("lets a later layer override the level while `allow` keeps layering", () => {
+    const config = loadConfig({
+      cwd,
+      env: {},
+      userPath,
+      readFile: files({
+        [userPath]: JSON.stringify({ toolPolicy: { layers: ["readonly"] } }),
+        [`${cwd}/adt-mcp.config.jsonc`]: JSON.stringify({ toolPolicy: { expose: "core", allow: ["Get*"] } }),
+      }),
+    });
+    expect(config.toolPolicy.expose).toBe("core");
+    expect(config.toolPolicy.allow).toEqual(["Get*"]);
   });
 
   it("names the layer and the field when a layer is invalid", () => {

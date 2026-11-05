@@ -1,6 +1,6 @@
 {
   "name": "abap-adt-mcp-gateway",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Multi-system ABAP ADT MCP gateway: one MCP server for many SAP systems, one ADT session per system, a fixed 335-tool contract.",
   "type": "module",
   "license": "MIT",
@@ -40,7 +40,7 @@
     "gen:layer-map": "node tools/scripts/gen-layer-map.mjs",
     "gen:schema": "node tools/scripts/gen-schema.mjs",
     "gen:tools": "node tools/scripts/gen-tools-doc.mjs",
-    "preset:core": "node tools/scripts/tool-presets.mjs --preset core",
+    "preset:core": "node tools/scripts/tool-presets.mjs --level core",
     "status": "node tools/scripts/mcp-status.mjs",
     "verify:catalog": "node tools/scripts/verify-catalog.mjs",
     "verify:private": "node tools/scripts/scan-private.mjs",

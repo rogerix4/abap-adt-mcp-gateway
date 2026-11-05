@@ -6,7 +6,7 @@ call it, and what to do when something does not work.
 | Document | Read it when |
 |---|---|
 | [../README.md](../README.md) | you want the overview, the feature list and a quick start |
-| [ARCHITECTURE.md](ARCHITECTURE.md) | you need the call path, the tool contract, sessions and locks, or how activation is verified |
+| [ARCHITECTURE.md](ARCHITECTURE.md) | you need the call path, multi-system concurrency, the tool contract, sessions and locks, or how activation is verified |
 | [OPERATIONS.md](OPERATIONS.md) | you run the server: process model, write boundary, configuration layers, advertised surface, onboarding a new SAP system, build rules |
 | [CONFIGURATION.md](CONFIGURATION.md) | you write or debug `adt-mcp.config.jsonc` |
 | [USAGE.md](USAGE.md) | you call the tools and want the shapes, the lock dance and the error codes |
@@ -18,7 +18,9 @@ call it, and what to do when something does not work.
 
 ## The four documents that answer most questions
 
-1. **How does a call travel?** [ARCHITECTURE.md](ARCHITECTURE.md#call-path).
+1. **How does a call travel, and can several systems be used at once?**
+   [ARCHITECTURE.md](ARCHITECTURE.md#call-path) and
+   [ARCHITECTURE.md](ARCHITECTURE.md#multi-system-concurrency).
 2. **Why was my write refused?** [OPERATIONS.md](OPERATIONS.md#the-write-boundary) — only
    `tier: "dev"` systems are writable.
 3. **Which shape does this tool take?** [TOOLS.md](TOOLS.md).
