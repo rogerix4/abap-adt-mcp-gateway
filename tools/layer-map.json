@@ -1,0 +1,4713 @@
+{
+  "generatedFrom": "tools/catalog.json",
+  "summary": {
+    "total": 335,
+    "effect": {
+      "write": 185,
+      "read": 144,
+      "execute": 6
+    },
+    "effectSource": {
+      "verb": 297,
+      "override": 38
+    },
+    "layer": {
+      "high": 201,
+      "low": 134
+    },
+    "families": 107
+  },
+  "problems": [],
+  "tools": [
+    {
+      "name": "ActivateBehaviorDefinitionLow",
+      "verb": "Activate",
+      "subject": "BehaviorDefinition",
+      "family": "BehaviorDefinition",
+      "layer": "low",
+      "hasHighSibling": false,
+      "requires": {
+        "lockHandle": false,
+        "session": true
+      },
+      "effect": "write",
+      "effectSource": "verb"
+    },
+    {
+      "name": "ActivateClassLow",
+      "verb": "Activate",
+      "subject": "Class",
+      "family": "Class",
+      "layer": "low",
+      "hasHighSibling": false,
+      "requires": {
+        "lockHandle": false,
+        "session": true
+      },
+      "effect": "write",
+      "effectSource": "verb"
+    },
+    {
+      "name": "ActivateClassTestClassesLow",
+      "verb": "Activate",
+      "subject": "ClassTestClasses",
+      "family": "ClassTestClasses",
+      "layer": "low",
+      "hasHighSibling": false,
+      "requires": {
+        "lockHandle": false,
+        "session": true
+      },
+      "effect": "write",
+      "effectSource": "verb"
+    },
+    {
+      "name": "ActivateDataElementLow",
+      "verb": "Activate",
+      "subject": "DataElement",
+      "family": "DataElement",
+      "layer": "low",
+      "hasHighSibling": false,
+      "requires": {
+        "lockHandle": false,
+        "session": true
+      },
+      "effect": "write",
+      "effectSource": "verb"
+    },
+    {
+      "name": "ActivateDomainLow",
+      "verb": "Activate",
+      "subject": "Domain",
+      "family": "Domain",
+      "layer": "low",
+      "hasHighSibling": false,
+      "requires": {
+        "lockHandle": false,
+        "session": true
+      },
+      "effect": "write",
+      "effectSource": "verb"
+    },
+    {
+      "name": "ActivateFunctionGroupLow",
+      "verb": "Activate",
+      "subject": "FunctionGroup",
+      "family": "FunctionGroup",
+      "layer": "low",
+      "hasHighSibling": false,
+      "requires": {
+        "lockHandle": false,
+        "session": true
+      },
+      "effect": "write",
+      "effectSource": "verb"
+    },
+    {
+      "name": "ActivateFunctionModuleLow",
+      "verb": "Activate",
+      "subject": "FunctionModule",
+      "family": "FunctionModule",
+      "layer": "low",
+      "hasHighSibling": false,
+      "requires": {
+        "lockHandle": false,
+        "session": true
+      },
+      "effect": "write",
+      "effectSource": "verb"
+    },
+    {
+      "name": "ActivateGuiStatusLow",
+      "verb": "Activate",
+      "subject": "GuiStatus",
+      "family": "GuiStatus",
+      "layer": "low",
+      "hasHighSibling": false,
+      "requires": {
+        "lockHandle": false,
+        "session": true
+      },
+      "effect": "write",
+      "effectSource": "verb"
+    },
+    {
+      "name": "ActivateInterfaceLow",
+      "verb": "Activate",
+      "subject": "Interface",
+      "family": "Interface",
+      "layer": "low",
+      "hasHighSibling": false,
+      "requires": {
+        "lockHandle": false,
+        "session": true
+      },
+      "effect": "write",
+      "effectSource": "verb"
+    },
+    {
+      "name": "ActivateMetadataExtensionLow",
+      "verb": "Activate",
+      "subject": "MetadataExtension",
+      "family": "MetadataExtension",
+      "layer": "low",
+      "hasHighSibling": false,
+      "requires": {
+        "lockHandle": false,
+        "session": true
+      },
+      "effect": "write",
+      "effectSource": "verb"
+    },
+    {
+      "name": "ActivateObjectLow",
+      "verb": "Activate",
+      "subject": "Object",
+      "family": "Object",
+      "layer": "low",
+      "hasHighSibling": false,
+      "requires": {
+        "lockHandle": false,
+        "session": false
+      },
+      "effect": "write",
+      "effectSource": "verb"
+    },
+    {
+      "name": "ActivateObjects",
+      "verb": "Activate",
+      "subject": "Objects",
+      "family": "Objects",
+      "layer": "high",
+      "hasHighSibling": false,
+      "requires": {
+        "lockHandle": false,
+        "session": false
+      },
+      "effect": "write",
+      "effectSource": "verb"
+    },
+    {
+      "name": "ActivateProgramLow",
+      "verb": "Activate",
+      "subject": "Program",
+      "family": "Program",
+      "layer": "low",
+      "hasHighSibling": false,
+      "requires": {
+        "lockHandle": false,
+        "session": true
+      },
+      "effect": "write",
+      "effectSource": "verb"
+    },
+    {
+      "name": "ActivateScreenLow",
+      "verb": "Activate",
+      "subject": "Screen",
+      "family": "Screen",
+      "layer": "low",
+      "hasHighSibling": false,
+      "requires": {
+        "lockHandle": false,
+        "session": true
+      },
+      "effect": "write",
+      "effectSource": "verb"
+    },
+    {
+      "name": "ActivateStructureLow",
+      "verb": "Activate",
+      "subject": "Structure",
+      "family": "Structure",
+      "layer": "low",
+      "hasHighSibling": false,
+      "requires": {
+        "lockHandle": false,
+        "session": true
+      },
+      "effect": "write",
+      "effectSource": "verb"
+    },
+    {
+      "name": "ActivateTableLow",
+      "verb": "Activate",
+      "subject": "Table",
+      "family": "Table",
+      "layer": "low",
+      "hasHighSibling": false,
+      "requires": {
+        "lockHandle": false,
+        "session": true
+      },
+      "effect": "write",
+      "effectSource": "verb"
+    },
+    {
+      "name": "ActivateCdsViewLow",
+      "verb": "Activate",
+      "subject": "CdsView",
+      "family": "CdsView",
+      "layer": "low",
+      "hasHighSibling": false,
+      "requires": {
+        "lockHandle": false,
+        "session": true
+      },
+      "effect": "write",
+      "effectSource": "verb"
+    },
+    {
+      "name": "CheckBdefLow",
+      "verb": "Check",
+      "subject": "Bdef",
+      "family": "Bdef",
+      "layer": "low",
+      "hasHighSibling": false,
+      "requires": {
+        "lockHandle": false,
+        "session": true
+      },
+      "effect": "read",
+      "effectSource": "verb"
+    },
+    {
+      "name": "CheckClassLow",
+      "verb": "Check",
+      "subject": "Class",
+      "family": "Class",
+      "layer": "low",
+      "hasHighSibling": false,
+      "requires": {
+        "lockHandle": false,
+        "session": true
+      },
+      "effect": "read",
+      "effectSource": "verb"
+    },
+    {
+      "name": "CheckDataElementLow",
+      "verb": "Check",
+      "subject": "DataElement",
+      "family": "DataElement",
+      "layer": "low",
+      "hasHighSibling": false,
+      "requires": {
+        "lockHandle": false,
+        "session": true
+      },
+      "effect": "read",
+      "effectSource": "verb"
+    },
+    {
+      "name": "CheckDomainLow",
+      "verb": "Check",
+      "subject": "Domain",
+      "family": "Domain",
+      "layer": "low",
+      "hasHighSibling": false,
+      "requires": {
+        "lockHandle": false,
+        "session": true
+      },
+      "effect": "read",
+      "effectSource": "verb"
+    },
+    {
+      "name": "CheckFunctionGroupLow",
+      "verb": "Check",
+      "subject": "FunctionGroup",
+      "family": "FunctionGroup",
+      "layer": "low",
+      "hasHighSibling": false,
+      "requires": {
+        "lockHandle": false,
+        "session": true
+      },
+      "effect": "read",
+      "effectSource": "verb"
+    },
+    {
+      "name": "CheckFunctionModuleLow",
+      "verb": "Check",
+      "subject": "FunctionModule",
+      "family": "FunctionModule",
+      "layer": "low",
+      "hasHighSibling": false,
+      "requires": {
+        "lockHandle": false,
+        "session": true
+      },
+      "effect": "read",
+      "effectSource": "verb"
+    },
+    {
+      "name": "CheckInterfaceLow",
+      "verb": "Check",
+      "subject": "Interface",
+      "family": "Interface",
+      "layer": "low",
+      "hasHighSibling": false,
+      "requires": {
+        "lockHandle": false,
+        "session": true
+      },
+      "effect": "read",
+      "effectSource": "verb"
+    },
+    {
+      "name": "CheckMetadataExtensionLow",
+      "verb": "Check",
+      "subject": "MetadataExtension",
+      "family": "MetadataExtension",
+      "layer": "low",
+      "hasHighSibling": false,
+      "requires": {
+        "lockHandle": false,
+        "session": true
+      },
+      "effect": "read",
+      "effectSource": "verb"
+    },
+    {
+      "name": "CheckObjectLow",
+      "verb": "Check",
+      "subject": "Object",
+      "family": "Object",
+      "layer": "low",
+      "hasHighSibling": false,
+      "requires": {
+        "lockHandle": false,
+        "session": true
+      },
+      "effect": "read",
+      "effectSource": "verb"
+    },
+    {
+      "name": "CheckPackageLow",
+      "verb": "Check",
+      "subject": "Package",
+      "family": "Package",
+      "layer": "low",
+      "hasHighSibling": false,
+      "requires": {
+        "lockHandle": false,
+        "session": true
+      },
+      "effect": "read",
+      "effectSource": "verb"
+    },
+    {
+      "name": "CheckProgramLow",
+      "verb": "Check",
+      "subject": "Program",
+      "family": "Program",
+      "layer": "low",
+      "hasHighSibling": false,
+      "requires": {
+        "lockHandle": false,
+        "session": true
+      },
+      "effect": "read",
+      "effectSource": "verb"
+    },
+    {
+      "name": "CheckStructureLow",
+      "verb": "Check",
+      "subject": "Structure",
+      "family": "Structure",
+      "layer": "low",
+      "hasHighSibling": false,
+      "requires": {
+        "lockHandle": false,
+        "session": true
+      },
+      "effect": "read",
+      "effectSource": "verb"
+    },
+    {
+      "name": "CheckTableLow",
+      "verb": "Check",
+      "subject": "Table",
+      "family": "Table",
+      "layer": "low",
+      "hasHighSibling": false,
+      "requires": {
+        "lockHandle": false,
+        "session": true
+      },
+      "effect": "read",
+      "effectSource": "verb"
+    },
+    {
+      "name": "CheckCdsViewLow",
+      "verb": "Check",
+      "subject": "CdsView",
+      "family": "CdsView",
+      "layer": "low",
+      "hasHighSibling": false,
+      "requires": {
+        "lockHandle": false,
+        "session": true
+      },
+      "effect": "read",
+      "effectSource": "verb"
+    },
+    {
+      "name": "CreateBehaviorDefinition",
+      "verb": "Create",
+      "subject": "BehaviorDefinition",
+      "family": "BehaviorDefinition",
+      "layer": "high",
+      "hasHighSibling": false,
+      "requires": {
+        "lockHandle": false,
+        "session": false
+      },
+      "effect": "write",
+      "effectSource": "verb"
+    },
+    {
+      "name": "CreateBehaviorDefinitionLow",
+      "verb": "Create",
+      "subject": "BehaviorDefinition",
+      "family": "BehaviorDefinition",
+      "layer": "low",
+      "hasHighSibling": true,
+      "requires": {
+        "lockHandle": false,
+        "session": true
+      },
+      "effect": "write",
+      "effectSource": "verb"
+    },
+    {
+      "name": "CreateBehaviorImplementation",
+      "verb": "Create",
+      "subject": "BehaviorImplementation",
+      "family": "BehaviorImplementation",
+      "layer": "high",
+      "hasHighSibling": false,
+      "requires": {
+        "lockHandle": false,
+        "session": false
+      },
+      "effect": "write",
+      "effectSource": "verb"
+    },
+    {
+      "name": "CreateBehaviorImplementationLow",
+      "verb": "Create",
+      "subject": "BehaviorImplementation",
+      "family": "BehaviorImplementation",
+      "layer": "low",
+      "hasHighSibling": true,
+      "requires": {
+        "lockHandle": false,
+        "session": true
+      },
+      "effect": "write",
+      "effectSource": "verb"
+    },
+    {
+      "name": "CreateCdsUnitTest",
+      "verb": "Create",
+      "subject": "CdsUnitTest",
+      "family": "CdsUnitTest",
+      "layer": "high",
+      "hasHighSibling": false,
+      "requires": {
+        "lockHandle": false,
+        "session": false
+      },
+      "effect": "write",
+      "effectSource": "verb"
+    },
+    {
+      "name": "CreateClass",
+      "verb": "Create",
+      "subject": "Class",
+      "family": "Class",
+      "layer": "high",
+      "hasHighSibling": false,
+      "requires": {
+        "lockHandle": false,
+        "session": false
+      },
+      "effect": "write",
+      "effectSource": "verb"
+    },
+    {
+      "name": "CreateClassLow",
+      "verb": "Create",
+      "subject": "Class",
+      "family": "Class",
+      "layer": "low",
+      "hasHighSibling": true,
+      "requires": {
+        "lockHandle": false,
+        "session": true
+      },
+      "effect": "write",
+      "effectSource": "verb"
+    },
+    {
+      "name": "CreateDataElement",
+      "verb": "Create",
+      "subject": "DataElement",
+      "family": "DataElement",
+      "layer": "high",
+      "hasHighSibling": false,
+      "requires": {
+        "lockHandle": false,
+        "session": false
+      },
+      "effect": "write",
+      "effectSource": "verb"
+    },
+    {
+      "name": "CreateDataElementLow",
+      "verb": "Create",
+      "subject": "DataElement",
+      "family": "DataElement",
+      "layer": "low",
+      "hasHighSibling": true,
+      "requires": {
+        "lockHandle": false,
+        "session": true
+      },
+      "effect": "write",
+      "effectSource": "verb"
+    },
+    {
+      "name": "CreateDomain",
+      "verb": "Create",
+      "subject": "Domain",
+      "family": "Domain",
+      "layer": "high",
+      "hasHighSibling": false,
+      "requires": {
+        "lockHandle": false,
+        "session": false
+      },
+      "effect": "write",
+      "effectSource": "verb"
+    },
+    {
+      "name": "CreateDomainLow",
+      "verb": "Create",
+      "subject": "Domain",
+      "family": "Domain",
+      "layer": "low",
+      "hasHighSibling": true,
+      "requires": {
+        "lockHandle": false,
+        "session": true
+      },
+      "effect": "write",
+      "effectSource": "verb"
+    },
+    {
+      "name": "CreateFunctionGroup",
+      "verb": "Create",
+      "subject": "FunctionGroup",
+      "family": "FunctionGroup",
+      "layer": "high",
+      "hasHighSibling": false,
+      "requires": {
+        "lockHandle": false,
+        "session": false
+      },
+      "effect": "write",
+      "effectSource": "verb"
+    },
+    {
+      "name": "CreateFunctionGroupLow",
+      "verb": "Create",
+      "subject": "FunctionGroup",
+      "family": "FunctionGroup",
+      "layer": "low",
+      "hasHighSibling": true,
+      "requires": {
+        "lockHandle": false,
+        "session": true
+      },
+      "effect": "write",
+      "effectSource": "verb"
+    },
+    {
+      "name": "CreateFunctionModule",
+      "verb": "Create",
+      "subject": "FunctionModule",
+      "family": "FunctionModule",
+      "layer": "high",
+      "hasHighSibling": false,
+      "requires": {
+        "lockHandle": false,
+        "session": false
+      },
+      "effect": "write",
+      "effectSource": "verb"
+    },
+    {
+      "name": "CreateFunctionModuleLow",
+      "verb": "Create",
+      "subject": "FunctionModule",
+      "family": "FunctionModule",
+      "layer": "low",
+      "hasHighSibling": true,
+      "requires": {
+        "lockHandle": false,
+        "session": true
+      },
+      "effect": "write",
+      "effectSource": "verb"
+    },
+    {
+      "name": "CreateGuiStatus",
+      "verb": "Create",
+      "subject": "GuiStatus",
+      "family": "GuiStatus",
+      "layer": "high",
+      "hasHighSibling": false,
+      "requires": {
+        "lockHandle": false,
+        "session": false
+      },
+      "effect": "write",
+      "effectSource": "verb"
+    },
+    {
+      "name": "CreateGuiStatusLow",
+      "verb": "Create",
+      "subject": "GuiStatus",
+      "family": "GuiStatus",
+      "layer": "low",
+      "hasHighSibling": true,
+      "requires": {
+        "lockHandle": false,
+        "session": true
+      },
+      "effect": "write",
+      "effectSource": "verb"
+    },
+    {
+      "name": "CreateInclude",
+      "verb": "Create",
+      "subject": "Include",
+      "family": "Include",
+      "layer": "high",
+      "hasHighSibling": false,
+      "requires": {
+        "lockHandle": false,
+        "session": false
+      },
+      "effect": "write",
+      "effectSource": "verb"
+    },
+    {
+      "name": "CreateInterface",
+      "verb": "Create",
+      "subject": "Interface",
+      "family": "Interface",
+      "layer": "high",
+      "hasHighSibling": false,
+      "requires": {
+        "lockHandle": false,
+        "session": false
+      },
+      "effect": "write",
+      "effectSource": "verb"
+    },
+    {
+      "name": "CreateInterfaceLow",
+      "verb": "Create",
+      "subject": "Interface",
+      "family": "Interface",
+      "layer": "low",
+      "hasHighSibling": true,
+      "requires": {
+        "lockHandle": false,
+        "session": true
+      },
+      "effect": "write",
+      "effectSource": "verb"
+    },
+    {
+      "name": "CreateMetadataExtension",
+      "verb": "Create",
+      "subject": "MetadataExtension",
+      "family": "MetadataExtension",
+      "layer": "high",
+      "hasHighSibling": false,
+      "requires": {
+        "lockHandle": false,
+        "session": false
+      },
+      "effect": "write",
+      "effectSource": "verb"
+    },
+    {
+      "name": "CreateMetadataExtensionLow",
+      "verb": "Create",
+      "subject": "MetadataExtension",
+      "family": "MetadataExtension",
+      "layer": "low",
+      "hasHighSibling": true,
+      "requires": {
+        "lockHandle": false,
+        "session": true
+      },
+      "effect": "write",
+      "effectSource": "verb"
+    },
+    {
+      "name": "CreatePackage",
+      "verb": "Create",
+      "subject": "Package",
+      "family": "Package",
+      "layer": "high",
+      "hasHighSibling": false,
+      "requires": {
+        "lockHandle": false,
+        "session": false
+      },
+      "effect": "write",
+      "effectSource": "verb"
+    },
+    {
+      "name": "CreatePackageLow",
+      "verb": "Create",
+      "subject": "Package",
+      "family": "Package",
+      "layer": "low",
+      "hasHighSibling": true,
+      "requires": {
+        "lockHandle": false,
+        "session": true
+      },
+      "effect": "write",
+      "effectSource": "verb"
+    },
+    {
+      "name": "CreateProgram",
+      "verb": "Create",
+      "subject": "Program",
+      "family": "Program",
+      "layer": "high",
+      "hasHighSibling": false,
+      "requires": {
+        "lockHandle": false,
+        "session": false
+      },
+      "effect": "write",
+      "effectSource": "verb"
+    },
+    {
+      "name": "CreateProgramLow",
+      "verb": "Create",
+      "subject": "Program",
+      "family": "Program",
+      "layer": "low",
+      "hasHighSibling": true,
+      "requires": {
+        "lockHandle": false,
+        "session": true
+      },
+      "effect": "write",
+      "effectSource": "verb"
+    },
+    {
+      "name": "CreateScreen",
+      "verb": "Create",
+      "subject": "Screen",
+      "family": "Screen",
+      "layer": "high",
+      "hasHighSibling": false,
+      "requires": {
+        "lockHandle": false,
+        "session": false
+      },
+      "effect": "write",
+      "effectSource": "verb"
+    },
+    {
+      "name": "CreateScreenLow",
+      "verb": "Create",
+      "subject": "Screen",
+      "family": "Screen",
+      "layer": "low",
+      "hasHighSibling": true,
+      "requires": {
+        "lockHandle": false,
+        "session": true
+      },
+      "effect": "write",
+      "effectSource": "verb"
+    },
+    {
+      "name": "CreateServiceBinding",
+      "verb": "Create",
+      "subject": "ServiceBinding",
+      "family": "ServiceBinding",
+      "layer": "high",
+      "hasHighSibling": false,
+      "requires": {
+        "lockHandle": false,
+        "session": false
+      },
+      "effect": "write",
+      "effectSource": "verb"
+    },
+    {
+      "name": "CreateServiceDefinition",
+      "verb": "Create",
+      "subject": "ServiceDefinition",
+      "family": "ServiceDefinition",
+      "layer": "high",
+      "hasHighSibling": false,
+      "requires": {
+        "lockHandle": false,
+        "session": false
+      },
+      "effect": "write",
+      "effectSource": "verb"
+    },
+    {
+      "name": "CreateSmartForm",
+      "verb": "Create",
+      "subject": "SmartForm",
+      "family": "SmartForm",
+      "layer": "high",
+      "hasHighSibling": false,
+      "requires": {
+        "lockHandle": false,
+        "session": false
+      },
+      "effect": "write",
+      "effectSource": "verb"
+    },
+    {
+      "name": "CreateStructure",
+      "verb": "Create",
+      "subject": "Structure",
+      "family": "Structure",
+      "layer": "high",
+      "hasHighSibling": false,
+      "requires": {
+        "lockHandle": false,
+        "session": false
+      },
+      "effect": "write",
+      "effectSource": "verb"
+    },
+    {
+      "name": "CreateStructureLow",
+      "verb": "Create",
+      "subject": "Structure",
+      "family": "Structure",
+      "layer": "low",
+      "hasHighSibling": true,
+      "requires": {
+        "lockHandle": false,
+        "session": true
+      },
+      "effect": "write",
+      "effectSource": "verb"
+    },
+    {
+      "name": "CreateTable",
+      "verb": "Create",
+      "subject": "Table",
+      "family": "Table",
+      "layer": "high",
+      "hasHighSibling": false,
+      "requires": {
+        "lockHandle": false,
+        "session": false
+      },
+      "effect": "write",
+      "effectSource": "verb"
+    },
+    {
+      "name": "CreateTableLow",
+      "verb": "Create",
+      "subject": "Table",
+      "family": "Table",
+      "layer": "low",
+      "hasHighSibling": true,
+      "requires": {
+        "lockHandle": false,
+        "session": true
+      },
+      "effect": "write",
+      "effectSource": "verb"
+    },
+    {
+      "name": "CreateTextElement",
+      "verb": "Create",
+      "subject": "TextElement",
+      "family": "TextElement",
+      "layer": "high",
+      "hasHighSibling": false,
+      "requires": {
+        "lockHandle": false,
+        "session": false
+      },
+      "effect": "write",
+      "effectSource": "verb"
+    },
+    {
+      "name": "CreateTransport",
+      "verb": "Create",
+      "subject": "Transport",
+      "family": "Transport",
+      "layer": "high",
+      "hasHighSibling": false,
+      "requires": {
+        "lockHandle": false,
+        "session": false
+      },
+      "effect": "write",
+      "effectSource": "verb"
+    },
+    {
+      "name": "CreateTransportLow",
+      "verb": "Create",
+      "subject": "Transport",
+      "family": "Transport",
+      "layer": "low",
+      "hasHighSibling": true,
+      "requires": {
+        "lockHandle": false,
+        "session": false
+      },
+      "effect": "write",
+      "effectSource": "verb"
+    },
+    {
+      "name": "CreateUnitTest",
+      "verb": "Create",
+      "subject": "UnitTest",
+      "family": "UnitTest",
+      "layer": "high",
+      "hasHighSibling": false,
+      "requires": {
+        "lockHandle": false,
+        "session": false
+      },
+      "effect": "write",
+      "effectSource": "verb"
+    },
+    {
+      "name": "CreateCdsView",
+      "verb": "Create",
+      "subject": "CdsView",
+      "family": "CdsView",
+      "layer": "high",
+      "hasHighSibling": false,
+      "requires": {
+        "lockHandle": false,
+        "session": false
+      },
+      "effect": "write",
+      "effectSource": "verb"
+    },
+    {
+      "name": "CreateCdsViewLow",
+      "verb": "Create",
+      "subject": "CdsView",
+      "family": "CdsView",
+      "layer": "low",
+      "hasHighSibling": true,
+      "requires": {
+        "lockHandle": false,
+        "session": true
+      },
+      "effect": "write",
+      "effectSource": "verb"
+    },
+    {
+      "name": "DeleteBehaviorDefinition",
+      "verb": "Delete",
+      "subject": "BehaviorDefinition",
+      "family": "BehaviorDefinition",
+      "layer": "high",
+      "hasHighSibling": false,
+      "requires": {
+        "lockHandle": false,
+        "session": false
+      },
+      "effect": "write",
+      "effectSource": "verb"
+    },
+    {
+      "name": "DeleteBehaviorDefinitionLow",
+      "verb": "Delete",
+      "subject": "BehaviorDefinition",
+      "family": "BehaviorDefinition",
+      "layer": "low",
+      "hasHighSibling": true,
+      "requires": {
+        "lockHandle": false,
+        "session": false
+      },
+      "effect": "write",
+      "effectSource": "verb"
+    },
+    {
+      "name": "DeleteBehaviorImplementation",
+      "verb": "Delete",
+      "subject": "BehaviorImplementation",
+      "family": "BehaviorImplementation",
+      "layer": "high",
+      "hasHighSibling": false,
+      "requires": {
+        "lockHandle": false,
+        "session": false
+      },
+      "effect": "write",
+      "effectSource": "verb"
+    },
+    {
+      "name": "DeleteCdsUnitTest",
+      "verb": "Delete",
+      "subject": "CdsUnitTest",
+      "family": "CdsUnitTest",
+      "layer": "high",
+      "hasHighSibling": false,
+      "requires": {
+        "lockHandle": false,
+        "session": false
+      },
+      "effect": "write",
+      "effectSource": "verb"
+    },
+    {
+      "name": "DeleteClass",
+      "verb": "Delete",
+      "subject": "Class",
+      "family": "Class",
+      "layer": "high",
+      "hasHighSibling": false,
+      "requires": {
+        "lockHandle": false,
+        "session": false
+      },
+      "effect": "write",
+      "effectSource": "verb"
+    },
+    {
+      "name": "DeleteClassLow",
+      "verb": "Delete",
+      "subject": "Class",
+      "family": "Class",
+      "layer": "low",
+      "hasHighSibling": true,
+      "requires": {
+        "lockHandle": false,
+        "session": false
+      },
+      "effect": "write",
+      "effectSource": "verb"
+    },
+    {
+      "name": "DeleteDataElement",
+      "verb": "Delete",
+      "subject": "DataElement",
+      "family": "DataElement",
+      "layer": "high",
+      "hasHighSibling": false,
+      "requires": {
+        "lockHandle": false,
+        "session": false
+      },
+      "effect": "write",
+      "effectSource": "verb"
+    },
+    {
+      "name": "DeleteDataElementLow",
+      "verb": "Delete",
+      "subject": "DataElement",
+      "family": "DataElement",
+      "layer": "low",
+      "hasHighSibling": true,
+      "requires": {
+        "lockHandle": false,
+        "session": false
+      },
+      "effect": "write",
+      "effectSource": "verb"
+    },
+    {
+      "name": "DeleteDomain",
+      "verb": "Delete",
+      "subject": "Domain",
+      "family": "Domain",
+      "layer": "high",
+      "hasHighSibling": false,
+      "requires": {
+        "lockHandle": false,
+        "session": false
+      },
+      "effect": "write",
+      "effectSource": "verb"
+    },
+    {
+      "name": "DeleteDomainLow",
+      "verb": "Delete",
+      "subject": "Domain",
+      "family": "Domain",
+      "layer": "low",
+      "hasHighSibling": true,
+      "requires": {
+        "lockHandle": false,
+        "session": false
+      },
+      "effect": "write",
+      "effectSource": "verb"
+    },
+    {
+      "name": "DeleteFunctionGroup",
+      "verb": "Delete",
+      "subject": "FunctionGroup",
+      "family": "FunctionGroup",
+      "layer": "high",
+      "hasHighSibling": false,
+      "requires": {
+        "lockHandle": false,
+        "session": false
+      },
+      "effect": "write",
+      "effectSource": "verb"
+    },
+    {
+      "name": "DeleteFunctionGroupLow",
+      "verb": "Delete",
+      "subject": "FunctionGroup",
+      "family": "FunctionGroup",
+      "layer": "low",
+      "hasHighSibling": true,
+      "requires": {
+        "lockHandle": false,
+        "session": false
+      },
+      "effect": "write",
+      "effectSource": "verb"
+    },
+    {
+      "name": "DeleteFunctionModule",
+      "verb": "Delete",
+      "subject": "FunctionModule",
+      "family": "FunctionModule",
+      "layer": "high",
+      "hasHighSibling": false,
+      "requires": {
+        "lockHandle": false,
+        "session": false
+      },
+      "effect": "write",
+      "effectSource": "verb"
+    },
+    {
+      "name": "DeleteFunctionModuleLow",
+      "verb": "Delete",
+      "subject": "FunctionModule",
+      "family": "FunctionModule",
+      "layer": "low",
+      "hasHighSibling": true,
+      "requires": {
+        "lockHandle": false,
+        "session": false
+      },
+      "effect": "write",
+      "effectSource": "verb"
+    },
+    {
+      "name": "DeleteGuiStatus",
+      "verb": "Delete",
+      "subject": "GuiStatus",
+      "family": "GuiStatus",
+      "layer": "high",
+      "hasHighSibling": false,
+      "requires": {
+        "lockHandle": false,
+        "session": false
+      },
+      "effect": "write",
+      "effectSource": "verb"
+    },
+    {
+      "name": "DeleteGuiStatusLow",
+      "verb": "Delete",
+      "subject": "GuiStatus",
+      "family": "GuiStatus",
+      "layer": "low",
+      "hasHighSibling": true,
+      "requires": {
+        "lockHandle": true,
+        "session": true
+      },
+      "effect": "write",
+      "effectSource": "verb"
+    },
+    {
+      "name": "DeleteInclude",
+      "verb": "Delete",
+      "subject": "Include",
+      "family": "Include",
+      "layer": "high",
+      "hasHighSibling": false,
+      "requires": {
+        "lockHandle": false,
+        "session": false
+      },
+      "effect": "write",
+      "effectSource": "verb"
+    },
+    {
+      "name": "DeleteInterface",
+      "verb": "Delete",
+      "subject": "Interface",
+      "family": "Interface",
+      "layer": "high",
+      "hasHighSibling": false,
+      "requires": {
+        "lockHandle": false,
+        "session": false
+      },
+      "effect": "write",
+      "effectSource": "verb"
+    },
+    {
+      "name": "DeleteInterfaceLow",
+      "verb": "Delete",
+      "subject": "Interface",
+      "family": "Interface",
+      "layer": "low",
+      "hasHighSibling": true,
+      "requires": {
+        "lockHandle": false,
+        "session": false
+      },
+      "effect": "write",
+      "effectSource": "verb"
+    },
+    {
+      "name": "DeleteLocalDefinitions",
+      "verb": "Delete",
+      "subject": "LocalDefinitions",
+      "family": "LocalDefinitions",
+      "layer": "high",
+      "hasHighSibling": false,
+      "requires": {
+        "lockHandle": false,
+        "session": false
+      },
+      "effect": "write",
+      "effectSource": "verb"
+    },
+    {
+      "name": "DeleteLocalMacros",
+      "verb": "Delete",
+      "subject": "LocalMacros",
+      "family": "LocalMacros",
+      "layer": "high",
+      "hasHighSibling": false,
+      "requires": {
+        "lockHandle": false,
+        "session": false
+      },
+      "effect": "write",
+      "effectSource": "verb"
+    },
+    {
+      "name": "DeleteLocalTestClass",
+      "verb": "Delete",
+      "subject": "LocalTestClass",
+      "family": "LocalTestClass",
+      "layer": "high",
+      "hasHighSibling": false,
+      "requires": {
+        "lockHandle": false,
+        "session": false
+      },
+      "effect": "write",
+      "effectSource": "verb"
+    },
+    {
+      "name": "DeleteLocalTypes",
+      "verb": "Delete",
+      "subject": "LocalTypes",
+      "family": "LocalTypes",
+      "layer": "high",
+      "hasHighSibling": false,
+      "requires": {
+        "lockHandle": false,
+        "session": false
+      },
+      "effect": "write",
+      "effectSource": "verb"
+    },
+    {
+      "name": "DeleteMetadataExtension",
+      "verb": "Delete",
+      "subject": "MetadataExtension",
+      "family": "MetadataExtension",
+      "layer": "high",
+      "hasHighSibling": false,
+      "requires": {
+        "lockHandle": false,
+        "session": false
+      },
+      "effect": "write",
+      "effectSource": "verb"
+    },
+    {
+      "name": "DeleteMetadataExtensionLow",
+      "verb": "Delete",
+      "subject": "MetadataExtension",
+      "family": "MetadataExtension",
+      "layer": "low",
+      "hasHighSibling": true,
+      "requires": {
+        "lockHandle": false,
+        "session": false
+      },
+      "effect": "write",
+      "effectSource": "verb"
+    },
+    {
+      "name": "DeleteObjectLow",
+      "verb": "Delete",
+      "subject": "Object",
+      "family": "Object",
+      "layer": "low",
+      "hasHighSibling": false,
+      "requires": {
+        "lockHandle": false,
+        "session": false
+      },
+      "effect": "write",
+      "effectSource": "verb"
+    },
+    {
+      "name": "DeletePackageLow",
+      "verb": "Delete",
+      "subject": "Package",
+      "family": "Package",
+      "layer": "low",
+      "hasHighSibling": false,
+      "requires": {
+        "lockHandle": false,
+        "session": false
+      },
+      "effect": "write",
+      "effectSource": "verb"
+    },
+    {
+      "name": "DeleteProgram",
+      "verb": "Delete",
+      "subject": "Program",
+      "family": "Program",
+      "layer": "high",
+      "hasHighSibling": false,
+      "requires": {
+        "lockHandle": false,
+        "session": false
+      },
+      "effect": "write",
+      "effectSource": "verb"
+    },
+    {
+      "name": "DeleteProgramLow",
+      "verb": "Delete",
+      "subject": "Program",
+      "family": "Program",
+      "layer": "low",
+      "hasHighSibling": true,
+      "requires": {
+        "lockHandle": false,
+        "session": false
+      },
+      "effect": "write",
+      "effectSource": "verb"
+    },
+    {
+      "name": "DeleteScreen",
+      "verb": "Delete",
+      "subject": "Screen",
+      "family": "Screen",
+      "layer": "high",
+      "hasHighSibling": false,
+      "requires": {
+        "lockHandle": false,
+        "session": false
+      },
+      "effect": "write",
+      "effectSource": "verb"
+    },
+    {
+      "name": "DeleteScreenLow",
+      "verb": "Delete",
+      "subject": "Screen",
+      "family": "Screen",
+      "layer": "low",
+      "hasHighSibling": true,
+      "requires": {
+        "lockHandle": true,
+        "session": true
+      },
+      "effect": "write",
+      "effectSource": "verb"
+    },
+    {
+      "name": "DeleteServiceBinding",
+      "verb": "Delete",
+      "subject": "ServiceBinding",
+      "family": "ServiceBinding",
+      "layer": "high",
+      "hasHighSibling": false,
+      "requires": {
+        "lockHandle": false,
+        "session": false
+      },
+      "effect": "write",
+      "effectSource": "verb"
+    },
+    {
+      "name": "DeleteServiceDefinition",
+      "verb": "Delete",
+      "subject": "ServiceDefinition",
+      "family": "ServiceDefinition",
+      "layer": "high",
+      "hasHighSibling": false,
+      "requires": {
+        "lockHandle": false,
+        "session": false
+      },
+      "effect": "write",
+      "effectSource": "verb"
+    },
+    {
+      "name": "DeleteSmartForm",
+      "verb": "Delete",
+      "subject": "SmartForm",
+      "family": "SmartForm",
+      "layer": "high",
+      "hasHighSibling": false,
+      "requires": {
+        "lockHandle": false,
+        "session": false
+      },
+      "effect": "write",
+      "effectSource": "verb"
+    },
+    {
+      "name": "DeleteStructure",
+      "verb": "Delete",
+      "subject": "Structure",
+      "family": "Structure",
+      "layer": "high",
+      "hasHighSibling": false,
+      "requires": {
+        "lockHandle": false,
+        "session": false
+      },
+      "effect": "write",
+      "effectSource": "verb"
+    },
+    {
+      "name": "DeleteStructureLow",
+      "verb": "Delete",
+      "subject": "Structure",
+      "family": "Structure",
+      "layer": "low",
+      "hasHighSibling": true,
+      "requires": {
+        "lockHandle": false,
+        "session": false
+      },
+      "effect": "write",
+      "effectSource": "verb"
+    },
+    {
+      "name": "DeleteTable",
+      "verb": "Delete",
+      "subject": "Table",
+      "family": "Table",
+      "layer": "high",
+      "hasHighSibling": false,
+      "requires": {
+        "lockHandle": false,
+        "session": false
+      },
+      "effect": "write",
+      "effectSource": "verb"
+    },
+    {
+      "name": "DeleteTableLow",
+      "verb": "Delete",
+      "subject": "Table",
+      "family": "Table",
+      "layer": "low",
+      "hasHighSibling": true,
+      "requires": {
+        "lockHandle": false,
+        "session": false
+      },
+      "effect": "write",
+      "effectSource": "verb"
+    },
+    {
+      "name": "DeleteTextElement",
+      "verb": "Delete",
+      "subject": "TextElement",
+      "family": "TextElement",
+      "layer": "high",
+      "hasHighSibling": false,
+      "requires": {
+        "lockHandle": false,
+        "session": false
+      },
+      "effect": "write",
+      "effectSource": "verb"
+    },
+    {
+      "name": "DeleteUnitTest",
+      "verb": "Delete",
+      "subject": "UnitTest",
+      "family": "UnitTest",
+      "layer": "high",
+      "hasHighSibling": false,
+      "requires": {
+        "lockHandle": false,
+        "session": false
+      },
+      "effect": "write",
+      "effectSource": "verb"
+    },
+    {
+      "name": "DeleteCdsView",
+      "verb": "Delete",
+      "subject": "CdsView",
+      "family": "CdsView",
+      "layer": "high",
+      "hasHighSibling": false,
+      "requires": {
+        "lockHandle": false,
+        "session": false
+      },
+      "effect": "write",
+      "effectSource": "verb"
+    },
+    {
+      "name": "DeleteCdsViewLow",
+      "verb": "Delete",
+      "subject": "CdsView",
+      "family": "CdsView",
+      "layer": "low",
+      "hasHighSibling": true,
+      "requires": {
+        "lockHandle": false,
+        "session": false
+      },
+      "effect": "write",
+      "effectSource": "verb"
+    },
+    {
+      "name": "DescribeByList",
+      "verb": "Describe",
+      "subject": "ByList",
+      "family": "ByList",
+      "layer": "high",
+      "hasHighSibling": false,
+      "requires": {
+        "lockHandle": false,
+        "session": false
+      },
+      "effect": "read",
+      "effectSource": "verb"
+    },
+    {
+      "name": "GetAbapAST",
+      "verb": "Get",
+      "subject": "AbapAST",
+      "family": "AbapAST",
+      "layer": "high",
+      "hasHighSibling": false,
+      "requires": {
+        "lockHandle": false,
+        "session": false
+      },
+      "effect": "read",
+      "effectSource": "verb"
+    },
+    {
+      "name": "GetAbapSemanticAnalysis",
+      "verb": "Get",
+      "subject": "AbapSemanticAnalysis",
+      "family": "AbapSemanticAnalysis",
+      "layer": "high",
+      "hasHighSibling": false,
+      "requires": {
+        "lockHandle": false,
+        "session": false
+      },
+      "effect": "read",
+      "effectSource": "verb"
+    },
+    {
+      "name": "GetAbapSystemSymbols",
+      "verb": "Get",
+      "subject": "AbapSystemSymbols",
+      "family": "AbapSystemSymbols",
+      "layer": "high",
+      "hasHighSibling": false,
+      "requires": {
+        "lockHandle": false,
+        "session": false
+      },
+      "effect": "read",
+      "effectSource": "verb"
+    },
+    {
+      "name": "GetAdtTypes",
+      "verb": "Get",
+      "subject": "AdtTypes",
+      "family": "AdtTypes",
+      "layer": "high",
+      "hasHighSibling": false,
+      "requires": {
+        "lockHandle": false,
+        "session": false
+      },
+      "effect": "read",
+      "effectSource": "verb"
+    },
+    {
+      "name": "GetBadiImplementations",
+      "verb": "Get",
+      "subject": "BadiImplementations",
+      "family": "BadiImplementations",
+      "layer": "high",
+      "hasHighSibling": false,
+      "requires": {
+        "lockHandle": false,
+        "session": false
+      },
+      "effect": "read",
+      "effectSource": "verb"
+    },
+    {
+      "name": "GetBehaviorDefinition",
+      "verb": "Get",
+      "subject": "BehaviorDefinition",
+      "family": "BehaviorDefinition",
+      "layer": "high",
+      "hasHighSibling": false,
+      "requires": {
+        "lockHandle": false,
+        "session": false
+      },
+      "effect": "read",
+      "effectSource": "verb"
+    },
+    {
+      "name": "GetBehaviorImplementation",
+      "verb": "Get",
+      "subject": "BehaviorImplementation",
+      "family": "BehaviorImplementation",
+      "layer": "high",
+      "hasHighSibling": false,
+      "requires": {
+        "lockHandle": false,
+        "session": false
+      },
+      "effect": "read",
+      "effectSource": "verb"
+    },
+    {
+      "name": "GetCdsUnitTest",
+      "verb": "Get",
+      "subject": "CdsUnitTest",
+      "family": "CdsUnitTest",
+      "layer": "high",
+      "hasHighSibling": false,
+      "requires": {
+        "lockHandle": false,
+        "session": false
+      },
+      "effect": "read",
+      "effectSource": "verb"
+    },
+    {
+      "name": "GetCdsUnitTestResult",
+      "verb": "Get",
+      "subject": "CdsUnitTestResult",
+      "family": "CdsUnitTestResult",
+      "layer": "high",
+      "hasHighSibling": false,
+      "requires": {
+        "lockHandle": false,
+        "session": false
+      },
+      "effect": "read",
+      "effectSource": "verb"
+    },
+    {
+      "name": "GetCdsUnitTestStatus",
+      "verb": "Get",
+      "subject": "CdsUnitTestStatus",
+      "family": "CdsUnitTestStatus",
+      "layer": "high",
+      "hasHighSibling": false,
+      "requires": {
+        "lockHandle": false,
+        "session": false
+      },
+      "effect": "read",
+      "effectSource": "verb"
+    },
+    {
+      "name": "GetClass",
+      "verb": "Get",
+      "subject": "Class",
+      "family": "Class",
+      "layer": "high",
+      "hasHighSibling": false,
+      "requires": {
+        "lockHandle": false,
+        "session": false
+      },
+      "effect": "read",
+      "effectSource": "verb"
+    },
+    {
+      "name": "GetClassUnitTestResultLow",
+      "verb": "Get",
+      "subject": "ClassUnitTestResult",
+      "family": "ClassUnitTestResult",
+      "layer": "low",
+      "hasHighSibling": false,
+      "requires": {
+        "lockHandle": false,
+        "session": true
+      },
+      "effect": "read",
+      "effectSource": "verb"
+    },
+    {
+      "name": "GetClassUnitTestStatusLow",
+      "verb": "Get",
+      "subject": "ClassUnitTestStatus",
+      "family": "ClassUnitTestStatus",
+      "layer": "low",
+      "hasHighSibling": false,
+      "requires": {
+        "lockHandle": false,
+        "session": true
+      },
+      "effect": "read",
+      "effectSource": "verb"
+    },
+    {
+      "name": "GetDataElement",
+      "verb": "Get",
+      "subject": "DataElement",
+      "family": "DataElement",
+      "layer": "high",
+      "hasHighSibling": false,
+      "requires": {
+        "lockHandle": false,
+        "session": false
+      },
+      "effect": "read",
+      "effectSource": "verb"
+    },
+    {
+      "name": "GetDomain",
+      "verb": "Get",
+      "subject": "Domain",
+      "family": "Domain",
+      "layer": "high",
+      "hasHighSibling": false,
+      "requires": {
+        "lockHandle": false,
+        "session": false
+      },
+      "effect": "read",
+      "effectSource": "verb"
+    },
+    {
+      "name": "GetEnhancementImpl",
+      "verb": "Get",
+      "subject": "EnhancementImpl",
+      "family": "EnhancementImpl",
+      "layer": "high",
+      "hasHighSibling": false,
+      "requires": {
+        "lockHandle": false,
+        "session": false
+      },
+      "effect": "read",
+      "effectSource": "verb"
+    },
+    {
+      "name": "GetEnhancements",
+      "verb": "Get",
+      "subject": "Enhancements",
+      "family": "Enhancements",
+      "layer": "high",
+      "hasHighSibling": false,
+      "requires": {
+        "lockHandle": false,
+        "session": false
+      },
+      "effect": "read",
+      "effectSource": "verb"
+    },
+    {
+      "name": "GetEnhancementSpot",
+      "verb": "Get",
+      "subject": "EnhancementSpot",
+      "family": "EnhancementSpot",
+      "layer": "high",
+      "hasHighSibling": false,
+      "requires": {
+        "lockHandle": false,
+        "session": false
+      },
+      "effect": "read",
+      "effectSource": "verb"
+    },
+    {
+      "name": "GetFunctionGroup",
+      "verb": "Get",
+      "subject": "FunctionGroup",
+      "family": "FunctionGroup",
+      "layer": "high",
+      "hasHighSibling": false,
+      "requires": {
+        "lockHandle": false,
+        "session": false
+      },
+      "effect": "read",
+      "effectSource": "verb"
+    },
+    {
+      "name": "GetFunctionModule",
+      "verb": "Get",
+      "subject": "FunctionModule",
+      "family": "FunctionModule",
+      "layer": "high",
+      "hasHighSibling": false,
+      "requires": {
+        "lockHandle": false,
+        "session": false
+      },
+      "effect": "read",
+      "effectSource": "verb"
+    },
+    {
+      "name": "GetGuiStatus",
+      "verb": "Get",
+      "subject": "GuiStatus",
+      "family": "GuiStatus",
+      "layer": "high",
+      "hasHighSibling": false,
+      "requires": {
+        "lockHandle": false,
+        "session": false
+      },
+      "effect": "read",
+      "effectSource": "verb"
+    },
+    {
+      "name": "GetGuiStatusList",
+      "verb": "Get",
+      "subject": "GuiStatusList",
+      "family": "GuiStatusList",
+      "layer": "high",
+      "hasHighSibling": false,
+      "requires": {
+        "lockHandle": false,
+        "session": false
+      },
+      "effect": "read",
+      "effectSource": "verb"
+    },
+    {
+      "name": "GetInactiveObjects",
+      "verb": "Get",
+      "subject": "InactiveObjects",
+      "family": "InactiveObjects",
+      "layer": "high",
+      "hasHighSibling": false,
+      "requires": {
+        "lockHandle": false,
+        "session": false
+      },
+      "effect": "read",
+      "effectSource": "verb"
+    },
+    {
+      "name": "GetInclude",
+      "verb": "Get",
+      "subject": "Include",
+      "family": "Include",
+      "layer": "high",
+      "hasHighSibling": false,
+      "requires": {
+        "lockHandle": false,
+        "session": false
+      },
+      "effect": "read",
+      "effectSource": "verb"
+    },
+    {
+      "name": "GetIncludesList",
+      "verb": "Get",
+      "subject": "IncludesList",
+      "family": "IncludesList",
+      "layer": "high",
+      "hasHighSibling": false,
+      "requires": {
+        "lockHandle": false,
+        "session": false
+      },
+      "effect": "read",
+      "effectSource": "verb"
+    },
+    {
+      "name": "GetInterface",
+      "verb": "Get",
+      "subject": "Interface",
+      "family": "Interface",
+      "layer": "high",
+      "hasHighSibling": false,
+      "requires": {
+        "lockHandle": false,
+        "session": false
+      },
+      "effect": "read",
+      "effectSource": "verb"
+    },
+    {
+      "name": "GetJobUsage",
+      "verb": "Get",
+      "subject": "JobUsage",
+      "family": "JobUsage",
+      "layer": "high",
+      "hasHighSibling": false,
+      "requires": {
+        "lockHandle": false,
+        "session": false
+      },
+      "effect": "read",
+      "effectSource": "verb"
+    },
+    {
+      "name": "GetLocalDefinitions",
+      "verb": "Get",
+      "subject": "LocalDefinitions",
+      "family": "LocalDefinitions",
+      "layer": "high",
+      "hasHighSibling": false,
+      "requires": {
+        "lockHandle": false,
+        "session": false
+      },
+      "effect": "read",
+      "effectSource": "verb"
+    },
+    {
+      "name": "GetLocalMacros",
+      "verb": "Get",
+      "subject": "LocalMacros",
+      "family": "LocalMacros",
+      "layer": "high",
+      "hasHighSibling": false,
+      "requires": {
+        "lockHandle": false,
+        "session": false
+      },
+      "effect": "read",
+      "effectSource": "verb"
+    },
+    {
+      "name": "GetLocalTestClass",
+      "verb": "Get",
+      "subject": "LocalTestClass",
+      "family": "LocalTestClass",
+      "layer": "high",
+      "hasHighSibling": false,
+      "requires": {
+        "lockHandle": false,
+        "session": false
+      },
+      "effect": "read",
+      "effectSource": "verb"
+    },
+    {
+      "name": "GetLocalTypes",
+      "verb": "Get",
+      "subject": "LocalTypes",
+      "family": "LocalTypes",
+      "layer": "high",
+      "hasHighSibling": false,
+      "requires": {
+        "lockHandle": false,
+        "session": false
+      },
+      "effect": "read",
+      "effectSource": "verb"
+    },
+    {
+      "name": "GetMetadataExtension",
+      "verb": "Get",
+      "subject": "MetadataExtension",
+      "family": "MetadataExtension",
+      "layer": "high",
+      "hasHighSibling": false,
+      "requires": {
+        "lockHandle": false,
+        "session": false
+      },
+      "effect": "read",
+      "effectSource": "verb"
+    },
+    {
+      "name": "GetNodeStructureLow",
+      "verb": "Get",
+      "subject": "NodeStructure",
+      "family": "NodeStructure",
+      "layer": "low",
+      "hasHighSibling": false,
+      "requires": {
+        "lockHandle": false,
+        "session": true
+      },
+      "effect": "read",
+      "effectSource": "verb"
+    },
+    {
+      "name": "GetObjectInfo",
+      "verb": "Get",
+      "subject": "ObjectInfo",
+      "family": "ObjectInfo",
+      "layer": "high",
+      "hasHighSibling": false,
+      "requires": {
+        "lockHandle": false,
+        "session": false
+      },
+      "effect": "read",
+      "effectSource": "verb"
+    },
+    {
+      "name": "GetObjectNodeFromCache",
+      "verb": "Get",
+      "subject": "ObjectNodeFromCache",
+      "family": "ObjectNodeFromCache",
+      "layer": "high",
+      "hasHighSibling": false,
+      "requires": {
+        "lockHandle": false,
+        "session": false
+      },
+      "effect": "read",
+      "effectSource": "verb"
+    },
+    {
+      "name": "GetObjectsByType",
+      "verb": "Get",
+      "subject": "ObjectsByType",
+      "family": "ObjectsByType",
+      "layer": "high",
+      "hasHighSibling": false,
+      "requires": {
+        "lockHandle": false,
+        "session": false
+      },
+      "effect": "read",
+      "effectSource": "verb"
+    },
+    {
+      "name": "GetObjectsList",
+      "verb": "Get",
+      "subject": "ObjectsList",
+      "family": "ObjectsList",
+      "layer": "high",
+      "hasHighSibling": false,
+      "requires": {
+        "lockHandle": false,
+        "session": false
+      },
+      "effect": "read",
+      "effectSource": "verb"
+    },
+    {
+      "name": "GetObjectStructure",
+      "verb": "Get",
+      "subject": "ObjectStructure",
+      "family": "ObjectStructure",
+      "layer": "high",
+      "hasHighSibling": false,
+      "requires": {
+        "lockHandle": false,
+        "session": false
+      },
+      "effect": "read",
+      "effectSource": "verb"
+    },
+    {
+      "name": "GetObjectStructureLow",
+      "verb": "Get",
+      "subject": "ObjectStructure",
+      "family": "ObjectStructure",
+      "layer": "low",
+      "hasHighSibling": true,
+      "requires": {
+        "lockHandle": false,
+        "session": true
+      },
+      "effect": "read",
+      "effectSource": "verb"
+    },
+    {
+      "name": "GetPackage",
+      "verb": "Get",
+      "subject": "Package",
+      "family": "Package",
+      "layer": "high",
+      "hasHighSibling": false,
+      "requires": {
+        "lockHandle": false,
+        "session": false
+      },
+      "effect": "read",
+      "effectSource": "verb"
+    },
+    {
+      "name": "GetPackageContents",
+      "verb": "Get",
+      "subject": "PackageContents",
+      "family": "PackageContents",
+      "layer": "high",
+      "hasHighSibling": false,
+      "requires": {
+        "lockHandle": false,
+        "session": false
+      },
+      "effect": "read",
+      "effectSource": "verb"
+    },
+    {
+      "name": "GetPackageTree",
+      "verb": "Get",
+      "subject": "PackageTree",
+      "family": "PackageTree",
+      "layer": "high",
+      "hasHighSibling": false,
+      "requires": {
+        "lockHandle": false,
+        "session": false
+      },
+      "effect": "read",
+      "effectSource": "verb"
+    },
+    {
+      "name": "GetProgFullCode",
+      "verb": "Get",
+      "subject": "ProgFullCode",
+      "family": "ProgFullCode",
+      "layer": "high",
+      "hasHighSibling": false,
+      "requires": {
+        "lockHandle": false,
+        "session": false
+      },
+      "effect": "read",
+      "effectSource": "verb"
+    },
+    {
+      "name": "GetProgram",
+      "verb": "Get",
+      "subject": "Program",
+      "family": "Program",
+      "layer": "high",
+      "hasHighSibling": false,
+      "requires": {
+        "lockHandle": false,
+        "session": false
+      },
+      "effect": "read",
+      "effectSource": "verb"
+    },
+    {
+      "name": "GetScreen",
+      "verb": "Get",
+      "subject": "Screen",
+      "family": "Screen",
+      "layer": "high",
+      "hasHighSibling": false,
+      "requires": {
+        "lockHandle": false,
+        "session": false
+      },
+      "effect": "read",
+      "effectSource": "verb"
+    },
+    {
+      "name": "GetScreensList",
+      "verb": "Get",
+      "subject": "ScreensList",
+      "family": "ScreensList",
+      "layer": "high",
+      "hasHighSibling": false,
+      "requires": {
+        "lockHandle": false,
+        "session": false
+      },
+      "effect": "read",
+      "effectSource": "verb"
+    },
+    {
+      "name": "GetServiceBinding",
+      "verb": "Get",
+      "subject": "ServiceBinding",
+      "family": "ServiceBinding",
+      "layer": "high",
+      "hasHighSibling": false,
+      "requires": {
+        "lockHandle": false,
+        "session": false
+      },
+      "effect": "read",
+      "effectSource": "verb"
+    },
+    {
+      "name": "GetServiceDefinition",
+      "verb": "Get",
+      "subject": "ServiceDefinition",
+      "family": "ServiceDefinition",
+      "layer": "high",
+      "hasHighSibling": false,
+      "requires": {
+        "lockHandle": false,
+        "session": false
+      },
+      "effect": "read",
+      "effectSource": "verb"
+    },
+    {
+      "name": "GetSession",
+      "verb": "Get",
+      "subject": "Session",
+      "family": "Session",
+      "layer": "high",
+      "hasHighSibling": false,
+      "requires": {
+        "lockHandle": false,
+        "session": false
+      },
+      "effect": "read",
+      "effectSource": "verb"
+    },
+    {
+      "name": "GetSmartFormContent",
+      "verb": "Get",
+      "subject": "SmartFormContent",
+      "family": "SmartFormContent",
+      "layer": "high",
+      "hasHighSibling": false,
+      "requires": {
+        "lockHandle": false,
+        "session": false
+      },
+      "effect": "read",
+      "effectSource": "verb"
+    },
+    {
+      "name": "GetSmartFormLayout",
+      "verb": "Get",
+      "subject": "SmartFormLayout",
+      "family": "SmartFormLayout",
+      "layer": "high",
+      "hasHighSibling": false,
+      "requires": {
+        "lockHandle": false,
+        "session": false
+      },
+      "effect": "read",
+      "effectSource": "verb"
+    },
+    {
+      "name": "GetSqlQuery",
+      "verb": "Get",
+      "subject": "SqlQuery",
+      "family": "SqlQuery",
+      "layer": "high",
+      "hasHighSibling": false,
+      "requires": {
+        "lockHandle": false,
+        "session": false
+      },
+      "effect": "read",
+      "effectSource": "verb"
+    },
+    {
+      "name": "GetStructure",
+      "verb": "Get",
+      "subject": "Structure",
+      "family": "Structure",
+      "layer": "high",
+      "hasHighSibling": false,
+      "requires": {
+        "lockHandle": false,
+        "session": false
+      },
+      "effect": "read",
+      "effectSource": "verb"
+    },
+    {
+      "name": "GetTable",
+      "verb": "Get",
+      "subject": "Table",
+      "family": "Table",
+      "layer": "high",
+      "hasHighSibling": false,
+      "requires": {
+        "lockHandle": false,
+        "session": false
+      },
+      "effect": "read",
+      "effectSource": "verb"
+    },
+    {
+      "name": "GetTableContents",
+      "verb": "Get",
+      "subject": "TableContents",
+      "family": "TableContents",
+      "layer": "high",
+      "hasHighSibling": false,
+      "requires": {
+        "lockHandle": false,
+        "session": false
+      },
+      "effect": "read",
+      "effectSource": "verb"
+    },
+    {
+      "name": "GetTcodeUsage",
+      "verb": "Get",
+      "subject": "TcodeUsage",
+      "family": "TcodeUsage",
+      "layer": "high",
+      "hasHighSibling": false,
+      "requires": {
+        "lockHandle": false,
+        "session": false
+      },
+      "effect": "read",
+      "effectSource": "verb"
+    },
+    {
+      "name": "GetTextElement",
+      "verb": "Get",
+      "subject": "TextElement",
+      "family": "TextElement",
+      "layer": "high",
+      "hasHighSibling": false,
+      "requires": {
+        "lockHandle": false,
+        "session": false
+      },
+      "effect": "read",
+      "effectSource": "verb"
+    },
+    {
+      "name": "GetTransaction",
+      "verb": "Get",
+      "subject": "Transaction",
+      "family": "Transaction",
+      "layer": "high",
+      "hasHighSibling": false,
+      "requires": {
+        "lockHandle": false,
+        "session": false
+      },
+      "effect": "read",
+      "effectSource": "verb"
+    },
+    {
+      "name": "GetTransport",
+      "verb": "Get",
+      "subject": "Transport",
+      "family": "Transport",
+      "layer": "high",
+      "hasHighSibling": false,
+      "requires": {
+        "lockHandle": false,
+        "session": false
+      },
+      "effect": "read",
+      "effectSource": "verb"
+    },
+    {
+      "name": "GetTypeInfo",
+      "verb": "Get",
+      "subject": "TypeInfo",
+      "family": "TypeInfo",
+      "layer": "high",
+      "hasHighSibling": false,
+      "requires": {
+        "lockHandle": false,
+        "session": false
+      },
+      "effect": "read",
+      "effectSource": "verb"
+    },
+    {
+      "name": "GetUnitTest",
+      "verb": "Get",
+      "subject": "UnitTest",
+      "family": "UnitTest",
+      "layer": "high",
+      "hasHighSibling": false,
+      "requires": {
+        "lockHandle": false,
+        "session": false
+      },
+      "effect": "read",
+      "effectSource": "verb"
+    },
+    {
+      "name": "GetUnitTestResult",
+      "verb": "Get",
+      "subject": "UnitTestResult",
+      "family": "UnitTestResult",
+      "layer": "high",
+      "hasHighSibling": false,
+      "requires": {
+        "lockHandle": false,
+        "session": false
+      },
+      "effect": "read",
+      "effectSource": "verb"
+    },
+    {
+      "name": "GetUnitTestStatus",
+      "verb": "Get",
+      "subject": "UnitTestStatus",
+      "family": "UnitTestStatus",
+      "layer": "high",
+      "hasHighSibling": false,
+      "requires": {
+        "lockHandle": false,
+        "session": false
+      },
+      "effect": "read",
+      "effectSource": "verb"
+    },
+    {
+      "name": "GetUsageSnippets",
+      "verb": "Get",
+      "subject": "UsageSnippets",
+      "family": "UsageSnippets",
+      "layer": "high",
+      "hasHighSibling": false,
+      "requires": {
+        "lockHandle": false,
+        "session": false
+      },
+      "effect": "read",
+      "effectSource": "verb"
+    },
+    {
+      "name": "GetCdsView",
+      "verb": "Get",
+      "subject": "CdsView",
+      "family": "CdsView",
+      "layer": "high",
+      "hasHighSibling": false,
+      "requires": {
+        "lockHandle": false,
+        "session": false
+      },
+      "effect": "read",
+      "effectSource": "verb"
+    },
+    {
+      "name": "GetVirtualFoldersLow",
+      "verb": "Get",
+      "subject": "VirtualFolders",
+      "family": "VirtualFolders",
+      "layer": "low",
+      "hasHighSibling": false,
+      "requires": {
+        "lockHandle": false,
+        "session": false
+      },
+      "effect": "read",
+      "effectSource": "verb"
+    },
+    {
+      "name": "GetWhereUsed",
+      "verb": "Get",
+      "subject": "WhereUsed",
+      "family": "WhereUsed",
+      "layer": "high",
+      "hasHighSibling": false,
+      "requires": {
+        "lockHandle": false,
+        "session": false
+      },
+      "effect": "read",
+      "effectSource": "verb"
+    },
+    {
+      "name": "HandlerActivate",
+      "verb": "Handler",
+      "subject": "Activate",
+      "family": "Activate",
+      "layer": "high",
+      "hasHighSibling": false,
+      "requires": {
+        "lockHandle": false,
+        "session": false
+      },
+      "effect": "write",
+      "effectSource": "override"
+    },
+    {
+      "name": "HandlerCdsUnitTestResult",
+      "verb": "Handler",
+      "subject": "CdsUnitTestResult",
+      "family": "CdsUnitTestResult",
+      "layer": "high",
+      "hasHighSibling": false,
+      "requires": {
+        "lockHandle": false,
+        "session": false
+      },
+      "effect": "read",
+      "effectSource": "override"
+    },
+    {
+      "name": "HandlerCdsUnitTestStatus",
+      "verb": "Handler",
+      "subject": "CdsUnitTestStatus",
+      "family": "CdsUnitTestStatus",
+      "layer": "high",
+      "hasHighSibling": false,
+      "requires": {
+        "lockHandle": false,
+        "session": false
+      },
+      "effect": "read",
+      "effectSource": "override"
+    },
+    {
+      "name": "HandlerCheckRun",
+      "verb": "Handler",
+      "subject": "CheckRun",
+      "family": "CheckRun",
+      "layer": "high",
+      "hasHighSibling": false,
+      "requires": {
+        "lockHandle": false,
+        "session": true
+      },
+      "effect": "read",
+      "effectSource": "override"
+    },
+    {
+      "name": "HandlerCreate",
+      "verb": "Handler",
+      "subject": "Create",
+      "family": "Create",
+      "layer": "high",
+      "hasHighSibling": false,
+      "requires": {
+        "lockHandle": false,
+        "session": false
+      },
+      "effect": "write",
+      "effectSource": "override"
+    },
+    {
+      "name": "HandlerDelete",
+      "verb": "Handler",
+      "subject": "Delete",
+      "family": "Delete",
+      "layer": "high",
+      "hasHighSibling": false,
+      "requires": {
+        "lockHandle": false,
+        "session": false
+      },
+      "effect": "write",
+      "effectSource": "override"
+    },
+    {
+      "name": "HandlerDumpList",
+      "verb": "Handler",
+      "subject": "DumpList",
+      "family": "DumpList",
+      "layer": "high",
+      "hasHighSibling": false,
+      "requires": {
+        "lockHandle": false,
+        "session": false
+      },
+      "effect": "read",
+      "effectSource": "override"
+    },
+    {
+      "name": "HandlerDumpView",
+      "verb": "Handler",
+      "subject": "DumpView",
+      "family": "DumpView",
+      "layer": "high",
+      "hasHighSibling": false,
+      "requires": {
+        "lockHandle": false,
+        "session": false
+      },
+      "effect": "read",
+      "effectSource": "override"
+    },
+    {
+      "name": "HandlerGet",
+      "verb": "Handler",
+      "subject": "Get",
+      "family": "Get",
+      "layer": "high",
+      "hasHighSibling": false,
+      "requires": {
+        "lockHandle": false,
+        "session": false
+      },
+      "effect": "read",
+      "effectSource": "override"
+    },
+    {
+      "name": "HandlerLock",
+      "verb": "Handler",
+      "subject": "Lock",
+      "family": "Lock",
+      "layer": "high",
+      "hasHighSibling": false,
+      "requires": {
+        "lockHandle": false,
+        "session": true
+      },
+      "effect": "write",
+      "effectSource": "override"
+    },
+    {
+      "name": "HandlerProfileList",
+      "verb": "Handler",
+      "subject": "ProfileList",
+      "family": "ProfileList",
+      "layer": "high",
+      "hasHighSibling": false,
+      "requires": {
+        "lockHandle": false,
+        "session": false
+      },
+      "effect": "read",
+      "effectSource": "override"
+    },
+    {
+      "name": "HandlerProfileRun",
+      "verb": "Handler",
+      "subject": "ProfileRun",
+      "family": "ProfileRun",
+      "layer": "high",
+      "hasHighSibling": false,
+      "requires": {
+        "lockHandle": false,
+        "session": false
+      },
+      "effect": "execute",
+      "effectSource": "override"
+    },
+    {
+      "name": "HandlerProfileView",
+      "verb": "Handler",
+      "subject": "ProfileView",
+      "family": "ProfileView",
+      "layer": "high",
+      "hasHighSibling": false,
+      "requires": {
+        "lockHandle": false,
+        "session": false
+      },
+      "effect": "read",
+      "effectSource": "override"
+    },
+    {
+      "name": "HandlerServiceBindingListTypes",
+      "verb": "Handler",
+      "subject": "ServiceBindingListTypes",
+      "family": "ServiceBindingListTypes",
+      "layer": "high",
+      "hasHighSibling": false,
+      "requires": {
+        "lockHandle": false,
+        "session": false
+      },
+      "effect": "read",
+      "effectSource": "override"
+    },
+    {
+      "name": "HandlerServiceBindingValidate",
+      "verb": "Handler",
+      "subject": "ServiceBindingValidate",
+      "family": "ServiceBindingValidate",
+      "layer": "high",
+      "hasHighSibling": false,
+      "requires": {
+        "lockHandle": false,
+        "session": false
+      },
+      "effect": "read",
+      "effectSource": "override"
+    },
+    {
+      "name": "HandlerTransportCreate",
+      "verb": "Handler",
+      "subject": "TransportCreate",
+      "family": "TransportCreate",
+      "layer": "high",
+      "hasHighSibling": false,
+      "requires": {
+        "lockHandle": false,
+        "session": false
+      },
+      "effect": "write",
+      "effectSource": "override"
+    },
+    {
+      "name": "HandlerUnitTestResult",
+      "verb": "Handler",
+      "subject": "UnitTestResult",
+      "family": "UnitTestResult",
+      "layer": "high",
+      "hasHighSibling": false,
+      "requires": {
+        "lockHandle": false,
+        "session": false
+      },
+      "effect": "read",
+      "effectSource": "override"
+    },
+    {
+      "name": "HandlerUnitTestRun",
+      "verb": "Handler",
+      "subject": "UnitTestRun",
+      "family": "UnitTestRun",
+      "layer": "high",
+      "hasHighSibling": false,
+      "requires": {
+        "lockHandle": false,
+        "session": false
+      },
+      "effect": "execute",
+      "effectSource": "override"
+    },
+    {
+      "name": "HandlerUnitTestStatus",
+      "verb": "Handler",
+      "subject": "UnitTestStatus",
+      "family": "UnitTestStatus",
+      "layer": "high",
+      "hasHighSibling": false,
+      "requires": {
+        "lockHandle": false,
+        "session": false
+      },
+      "effect": "read",
+      "effectSource": "override"
+    },
+    {
+      "name": "HandlerUnlock",
+      "verb": "Handler",
+      "subject": "Unlock",
+      "family": "Unlock",
+      "layer": "high",
+      "hasHighSibling": false,
+      "requires": {
+        "lockHandle": true,
+        "session": true
+      },
+      "effect": "write",
+      "effectSource": "override"
+    },
+    {
+      "name": "HandlerUpdate",
+      "verb": "Handler",
+      "subject": "Update",
+      "family": "Update",
+      "layer": "high",
+      "hasHighSibling": false,
+      "requires": {
+        "lockHandle": false,
+        "session": false
+      },
+      "effect": "write",
+      "effectSource": "override"
+    },
+    {
+      "name": "HandlerValidate",
+      "verb": "Handler",
+      "subject": "Validate",
+      "family": "Validate",
+      "layer": "high",
+      "hasHighSibling": false,
+      "requires": {
+        "lockHandle": false,
+        "session": true
+      },
+      "effect": "read",
+      "effectSource": "override"
+    },
+    {
+      "name": "ListServiceBindingTypes",
+      "verb": "List",
+      "subject": "ServiceBindingTypes",
+      "family": "ServiceBindingTypes",
+      "layer": "high",
+      "hasHighSibling": false,
+      "requires": {
+        "lockHandle": false,
+        "session": false
+      },
+      "effect": "read",
+      "effectSource": "verb"
+    },
+    {
+      "name": "ListTransports",
+      "verb": "List",
+      "subject": "Transports",
+      "family": "Transports",
+      "layer": "high",
+      "hasHighSibling": false,
+      "requires": {
+        "lockHandle": false,
+        "session": false
+      },
+      "effect": "read",
+      "effectSource": "verb"
+    },
+    {
+      "name": "LockBehaviorDefinitionLow",
+      "verb": "Lock",
+      "subject": "BehaviorDefinition",
+      "family": "BehaviorDefinition",
+      "layer": "low",
+      "hasHighSibling": false,
+      "requires": {
+        "lockHandle": false,
+        "session": true
+      },
+      "effect": "write",
+      "effectSource": "verb"
+    },
+    {
+      "name": "LockBehaviorImplementationLow",
+      "verb": "Lock",
+      "subject": "BehaviorImplementation",
+      "family": "BehaviorImplementation",
+      "layer": "low",
+      "hasHighSibling": false,
+      "requires": {
+        "lockHandle": false,
+        "session": true
+      },
+      "effect": "write",
+      "effectSource": "verb"
+    },
+    {
+      "name": "LockClassLow",
+      "verb": "Lock",
+      "subject": "Class",
+      "family": "Class",
+      "layer": "low",
+      "hasHighSibling": false,
+      "requires": {
+        "lockHandle": false,
+        "session": false
+      },
+      "effect": "write",
+      "effectSource": "verb"
+    },
+    {
+      "name": "LockClassTestClassesLow",
+      "verb": "Lock",
+      "subject": "ClassTestClasses",
+      "family": "ClassTestClasses",
+      "layer": "low",
+      "hasHighSibling": false,
+      "requires": {
+        "lockHandle": false,
+        "session": true
+      },
+      "effect": "write",
+      "effectSource": "verb"
+    },
+    {
+      "name": "LockDataElementLow",
+      "verb": "Lock",
+      "subject": "DataElement",
+      "family": "DataElement",
+      "layer": "low",
+      "hasHighSibling": false,
+      "requires": {
+        "lockHandle": false,
+        "session": true
+      },
+      "effect": "write",
+      "effectSource": "verb"
+    },
+    {
+      "name": "LockDomainLow",
+      "verb": "Lock",
+      "subject": "Domain",
+      "family": "Domain",
+      "layer": "low",
+      "hasHighSibling": false,
+      "requires": {
+        "lockHandle": false,
+        "session": true
+      },
+      "effect": "write",
+      "effectSource": "verb"
+    },
+    {
+      "name": "LockFunctionGroupLow",
+      "verb": "Lock",
+      "subject": "FunctionGroup",
+      "family": "FunctionGroup",
+      "layer": "low",
+      "hasHighSibling": false,
+      "requires": {
+        "lockHandle": false,
+        "session": true
+      },
+      "effect": "write",
+      "effectSource": "verb"
+    },
+    {
+      "name": "LockFunctionModuleLow",
+      "verb": "Lock",
+      "subject": "FunctionModule",
+      "family": "FunctionModule",
+      "layer": "low",
+      "hasHighSibling": false,
+      "requires": {
+        "lockHandle": false,
+        "session": true
+      },
+      "effect": "write",
+      "effectSource": "verb"
+    },
+    {
+      "name": "LockGuiStatusLow",
+      "verb": "Lock",
+      "subject": "GuiStatus",
+      "family": "GuiStatus",
+      "layer": "low",
+      "hasHighSibling": false,
+      "requires": {
+        "lockHandle": false,
+        "session": true
+      },
+      "effect": "write",
+      "effectSource": "verb"
+    },
+    {
+      "name": "LockInterfaceLow",
+      "verb": "Lock",
+      "subject": "Interface",
+      "family": "Interface",
+      "layer": "low",
+      "hasHighSibling": false,
+      "requires": {
+        "lockHandle": false,
+        "session": true
+      },
+      "effect": "write",
+      "effectSource": "verb"
+    },
+    {
+      "name": "LockMetadataExtensionLow",
+      "verb": "Lock",
+      "subject": "MetadataExtension",
+      "family": "MetadataExtension",
+      "layer": "low",
+      "hasHighSibling": false,
+      "requires": {
+        "lockHandle": false,
+        "session": true
+      },
+      "effect": "write",
+      "effectSource": "verb"
+    },
+    {
+      "name": "LockObjectLow",
+      "verb": "Lock",
+      "subject": "Object",
+      "family": "Object",
+      "layer": "low",
+      "hasHighSibling": false,
+      "requires": {
+        "lockHandle": false,
+        "session": true
+      },
+      "effect": "write",
+      "effectSource": "verb"
+    },
+    {
+      "name": "LockPackageLow",
+      "verb": "Lock",
+      "subject": "Package",
+      "family": "Package",
+      "layer": "low",
+      "hasHighSibling": false,
+      "requires": {
+        "lockHandle": false,
+        "session": true
+      },
+      "effect": "write",
+      "effectSource": "verb"
+    },
+    {
+      "name": "LockProgramLow",
+      "verb": "Lock",
+      "subject": "Program",
+      "family": "Program",
+      "layer": "low",
+      "hasHighSibling": false,
+      "requires": {
+        "lockHandle": false,
+        "session": true
+      },
+      "effect": "write",
+      "effectSource": "verb"
+    },
+    {
+      "name": "LockScreenLow",
+      "verb": "Lock",
+      "subject": "Screen",
+      "family": "Screen",
+      "layer": "low",
+      "hasHighSibling": false,
+      "requires": {
+        "lockHandle": false,
+        "session": true
+      },
+      "effect": "write",
+      "effectSource": "verb"
+    },
+    {
+      "name": "LockStructureLow",
+      "verb": "Lock",
+      "subject": "Structure",
+      "family": "Structure",
+      "layer": "low",
+      "hasHighSibling": false,
+      "requires": {
+        "lockHandle": false,
+        "session": true
+      },
+      "effect": "write",
+      "effectSource": "verb"
+    },
+    {
+      "name": "LockTableLow",
+      "verb": "Lock",
+      "subject": "Table",
+      "family": "Table",
+      "layer": "low",
+      "hasHighSibling": false,
+      "requires": {
+        "lockHandle": false,
+        "session": true
+      },
+      "effect": "write",
+      "effectSource": "verb"
+    },
+    {
+      "name": "LockCdsViewLow",
+      "verb": "Lock",
+      "subject": "CdsView",
+      "family": "CdsView",
+      "layer": "low",
+      "hasHighSibling": false,
+      "requires": {
+        "lockHandle": false,
+        "session": true
+      },
+      "effect": "write",
+      "effectSource": "verb"
+    },
+    {
+      "name": "PatchGuiStatus",
+      "verb": "Patch",
+      "subject": "GuiStatus",
+      "family": "GuiStatus",
+      "layer": "high",
+      "hasHighSibling": false,
+      "requires": {
+        "lockHandle": false,
+        "session": false
+      },
+      "effect": "write",
+      "effectSource": "verb"
+    },
+    {
+      "name": "ReadBehaviorDefinition",
+      "verb": "Read",
+      "subject": "BehaviorDefinition",
+      "family": "BehaviorDefinition",
+      "layer": "high",
+      "hasHighSibling": false,
+      "requires": {
+        "lockHandle": false,
+        "session": false
+      },
+      "effect": "read",
+      "effectSource": "verb"
+    },
+    {
+      "name": "ReadBehaviorImplementation",
+      "verb": "Read",
+      "subject": "BehaviorImplementation",
+      "family": "BehaviorImplementation",
+      "layer": "high",
+      "hasHighSibling": false,
+      "requires": {
+        "lockHandle": false,
+        "session": false
+      },
+      "effect": "read",
+      "effectSource": "verb"
+    },
+    {
+      "name": "ReadClass",
+      "verb": "Read",
+      "subject": "Class",
+      "family": "Class",
+      "layer": "high",
+      "hasHighSibling": false,
+      "requires": {
+        "lockHandle": false,
+        "session": false
+      },
+      "effect": "read",
+      "effectSource": "verb"
+    },
+    {
+      "name": "ReadDataElement",
+      "verb": "Read",
+      "subject": "DataElement",
+      "family": "DataElement",
+      "layer": "high",
+      "hasHighSibling": false,
+      "requires": {
+        "lockHandle": false,
+        "session": false
+      },
+      "effect": "read",
+      "effectSource": "verb"
+    },
+    {
+      "name": "ReadDomain",
+      "verb": "Read",
+      "subject": "Domain",
+      "family": "Domain",
+      "layer": "high",
+      "hasHighSibling": false,
+      "requires": {
+        "lockHandle": false,
+        "session": false
+      },
+      "effect": "read",
+      "effectSource": "verb"
+    },
+    {
+      "name": "ReadFunctionGroup",
+      "verb": "Read",
+      "subject": "FunctionGroup",
+      "family": "FunctionGroup",
+      "layer": "high",
+      "hasHighSibling": false,
+      "requires": {
+        "lockHandle": false,
+        "session": false
+      },
+      "effect": "read",
+      "effectSource": "verb"
+    },
+    {
+      "name": "ReadFunctionModule",
+      "verb": "Read",
+      "subject": "FunctionModule",
+      "family": "FunctionModule",
+      "layer": "high",
+      "hasHighSibling": false,
+      "requires": {
+        "lockHandle": false,
+        "session": false
+      },
+      "effect": "read",
+      "effectSource": "verb"
+    },
+    {
+      "name": "ReadGuiStatus",
+      "verb": "Read",
+      "subject": "GuiStatus",
+      "family": "GuiStatus",
+      "layer": "high",
+      "hasHighSibling": false,
+      "requires": {
+        "lockHandle": false,
+        "session": false
+      },
+      "effect": "read",
+      "effectSource": "verb"
+    },
+    {
+      "name": "ReadInterface",
+      "verb": "Read",
+      "subject": "Interface",
+      "family": "Interface",
+      "layer": "high",
+      "hasHighSibling": false,
+      "requires": {
+        "lockHandle": false,
+        "session": false
+      },
+      "effect": "read",
+      "effectSource": "verb"
+    },
+    {
+      "name": "ReadMetadataExtension",
+      "verb": "Read",
+      "subject": "MetadataExtension",
+      "family": "MetadataExtension",
+      "layer": "high",
+      "hasHighSibling": false,
+      "requires": {
+        "lockHandle": false,
+        "session": false
+      },
+      "effect": "read",
+      "effectSource": "verb"
+    },
+    {
+      "name": "ReadPackage",
+      "verb": "Read",
+      "subject": "Package",
+      "family": "Package",
+      "layer": "high",
+      "hasHighSibling": false,
+      "requires": {
+        "lockHandle": false,
+        "session": false
+      },
+      "effect": "read",
+      "effectSource": "verb"
+    },
+    {
+      "name": "ReadProgram",
+      "verb": "Read",
+      "subject": "Program",
+      "family": "Program",
+      "layer": "high",
+      "hasHighSibling": false,
+      "requires": {
+        "lockHandle": false,
+        "session": false
+      },
+      "effect": "read",
+      "effectSource": "verb"
+    },
+    {
+      "name": "ReadScreen",
+      "verb": "Read",
+      "subject": "Screen",
+      "family": "Screen",
+      "layer": "high",
+      "hasHighSibling": false,
+      "requires": {
+        "lockHandle": false,
+        "session": false
+      },
+      "effect": "read",
+      "effectSource": "verb"
+    },
+    {
+      "name": "ReadServiceBinding",
+      "verb": "Read",
+      "subject": "ServiceBinding",
+      "family": "ServiceBinding",
+      "layer": "high",
+      "hasHighSibling": false,
+      "requires": {
+        "lockHandle": false,
+        "session": false
+      },
+      "effect": "read",
+      "effectSource": "verb"
+    },
+    {
+      "name": "ReadServiceDefinition",
+      "verb": "Read",
+      "subject": "ServiceDefinition",
+      "family": "ServiceDefinition",
+      "layer": "high",
+      "hasHighSibling": false,
+      "requires": {
+        "lockHandle": false,
+        "session": false
+      },
+      "effect": "read",
+      "effectSource": "verb"
+    },
+    {
+      "name": "ReadStructure",
+      "verb": "Read",
+      "subject": "Structure",
+      "family": "Structure",
+      "layer": "high",
+      "hasHighSibling": false,
+      "requires": {
+        "lockHandle": false,
+        "session": false
+      },
+      "effect": "read",
+      "effectSource": "verb"
+    },
+    {
+      "name": "ReadTable",
+      "verb": "Read",
+      "subject": "Table",
+      "family": "Table",
+      "layer": "high",
+      "hasHighSibling": false,
+      "requires": {
+        "lockHandle": false,
+        "session": false
+      },
+      "effect": "read",
+      "effectSource": "verb"
+    },
+    {
+      "name": "ReadTextElementsBulk",
+      "verb": "Read",
+      "subject": "TextElementsBulk",
+      "family": "TextElementsBulk",
+      "layer": "high",
+      "hasHighSibling": false,
+      "requires": {
+        "lockHandle": false,
+        "session": false
+      },
+      "effect": "read",
+      "effectSource": "verb"
+    },
+    {
+      "name": "ReadCdsView",
+      "verb": "Read",
+      "subject": "CdsView",
+      "family": "CdsView",
+      "layer": "high",
+      "hasHighSibling": false,
+      "requires": {
+        "lockHandle": false,
+        "session": false
+      },
+      "effect": "read",
+      "effectSource": "verb"
+    },
+    {
+      "name": "ReloadProfile",
+      "verb": "Reload",
+      "subject": "Profile",
+      "family": "Profile",
+      "layer": "high",
+      "hasHighSibling": false,
+      "requires": {
+        "lockHandle": false,
+        "session": false
+      },
+      "effect": "read",
+      "effectSource": "override"
+    },
+    {
+      "name": "RenderSmartForm",
+      "verb": "Render",
+      "subject": "SmartForm",
+      "family": "SmartForm",
+      "layer": "high",
+      "hasHighSibling": false,
+      "requires": {
+        "lockHandle": false,
+        "session": false
+      },
+      "effect": "read",
+      "effectSource": "override"
+    },
+    {
+      "name": "RunClassUnitTestsLow",
+      "verb": "Run",
+      "subject": "ClassUnitTests",
+      "family": "ClassUnitTests",
+      "layer": "low",
+      "hasHighSibling": false,
+      "requires": {
+        "lockHandle": false,
+        "session": true
+      },
+      "effect": "execute",
+      "effectSource": "override"
+    },
+    {
+      "name": "RuntimeAnalyzeDump",
+      "verb": "Runtime",
+      "subject": "AnalyzeDump",
+      "family": "AnalyzeDump",
+      "layer": "high",
+      "hasHighSibling": false,
+      "requires": {
+        "lockHandle": false,
+        "session": false
+      },
+      "effect": "read",
+      "effectSource": "override"
+    },
+    {
+      "name": "RuntimeAnalyzeProfilerTrace",
+      "verb": "Runtime",
+      "subject": "AnalyzeProfilerTrace",
+      "family": "AnalyzeProfilerTrace",
+      "layer": "high",
+      "hasHighSibling": false,
+      "requires": {
+        "lockHandle": false,
+        "session": false
+      },
+      "effect": "read",
+      "effectSource": "override"
+    },
+    {
+      "name": "RuntimeCreateProfilerTraceParameters",
+      "verb": "Runtime",
+      "subject": "CreateProfilerTraceParameters",
+      "family": "CreateProfilerTraceParameters",
+      "layer": "high",
+      "hasHighSibling": false,
+      "requires": {
+        "lockHandle": false,
+        "session": false
+      },
+      "effect": "write",
+      "effectSource": "override"
+    },
+    {
+      "name": "RuntimeGetDumpById",
+      "verb": "Runtime",
+      "subject": "GetDumpById",
+      "family": "GetDumpById",
+      "layer": "high",
+      "hasHighSibling": false,
+      "requires": {
+        "lockHandle": false,
+        "session": false
+      },
+      "effect": "read",
+      "effectSource": "override"
+    },
+    {
+      "name": "RuntimeGetGatewayErrorLog",
+      "verb": "Runtime",
+      "subject": "GetGatewayErrorLog",
+      "family": "GetGatewayErrorLog",
+      "layer": "high",
+      "hasHighSibling": false,
+      "requires": {
+        "lockHandle": false,
+        "session": false
+      },
+      "effect": "read",
+      "effectSource": "override"
+    },
+    {
+      "name": "RuntimeGetProfilerTraceData",
+      "verb": "Runtime",
+      "subject": "GetProfilerTraceData",
+      "family": "GetProfilerTraceData",
+      "layer": "high",
+      "hasHighSibling": false,
+      "requires": {
+        "lockHandle": false,
+        "session": false
+      },
+      "effect": "read",
+      "effectSource": "override"
+    },
+    {
+      "name": "RuntimeListDumps",
+      "verb": "Runtime",
+      "subject": "ListDumps",
+      "family": "ListDumps",
+      "layer": "high",
+      "hasHighSibling": false,
+      "requires": {
+        "lockHandle": false,
+        "session": false
+      },
+      "effect": "read",
+      "effectSource": "override"
+    },
+    {
+      "name": "RuntimeListFeeds",
+      "verb": "Runtime",
+      "subject": "ListFeeds",
+      "family": "ListFeeds",
+      "layer": "high",
+      "hasHighSibling": false,
+      "requires": {
+        "lockHandle": false,
+        "session": false
+      },
+      "effect": "read",
+      "effectSource": "override"
+    },
+    {
+      "name": "RuntimeListProfilerTraceFiles",
+      "verb": "Runtime",
+      "subject": "ListProfilerTraceFiles",
+      "family": "ListProfilerTraceFiles",
+      "layer": "high",
+      "hasHighSibling": false,
+      "requires": {
+        "lockHandle": false,
+        "session": false
+      },
+      "effect": "read",
+      "effectSource": "override"
+    },
+    {
+      "name": "RuntimeListSystemMessages",
+      "verb": "Runtime",
+      "subject": "ListSystemMessages",
+      "family": "ListSystemMessages",
+      "layer": "high",
+      "hasHighSibling": false,
+      "requires": {
+        "lockHandle": false,
+        "session": false
+      },
+      "effect": "read",
+      "effectSource": "override"
+    },
+    {
+      "name": "RuntimeRunClassWithProfiling",
+      "verb": "Runtime",
+      "subject": "RunClassWithProfiling",
+      "family": "RunClassWithProfiling",
+      "layer": "high",
+      "hasHighSibling": false,
+      "requires": {
+        "lockHandle": false,
+        "session": false
+      },
+      "effect": "execute",
+      "effectSource": "override"
+    },
+    {
+      "name": "RuntimeRunProgramWithProfiling",
+      "verb": "Runtime",
+      "subject": "RunProgramWithProfiling",
+      "family": "RunProgramWithProfiling",
+      "layer": "high",
+      "hasHighSibling": false,
+      "requires": {
+        "lockHandle": false,
+        "session": false
+      },
+      "effect": "execute",
+      "effectSource": "override"
+    },
+    {
+      "name": "RunUnitTest",
+      "verb": "Run",
+      "subject": "UnitTest",
+      "family": "UnitTest",
+      "layer": "high",
+      "hasHighSibling": false,
+      "requires": {
+        "lockHandle": false,
+        "session": false
+      },
+      "effect": "execute",
+      "effectSource": "override"
+    },
+    {
+      "name": "SearchObject",
+      "verb": "Search",
+      "subject": "Object",
+      "family": "Object",
+      "layer": "high",
+      "hasHighSibling": false,
+      "requires": {
+        "lockHandle": false,
+        "session": false
+      },
+      "effect": "read",
+      "effectSource": "verb"
+    },
+    {
+      "name": "UnlockBehaviorDefinitionLow",
+      "verb": "Unlock",
+      "subject": "BehaviorDefinition",
+      "family": "BehaviorDefinition",
+      "layer": "low",
+      "hasHighSibling": false,
+      "requires": {
+        "lockHandle": true,
+        "session": true
+      },
+      "effect": "write",
+      "effectSource": "verb"
+    },
+    {
+      "name": "UnlockClassLow",
+      "verb": "Unlock",
+      "subject": "Class",
+      "family": "Class",
+      "layer": "low",
+      "hasHighSibling": false,
+      "requires": {
+        "lockHandle": true,
+        "session": false
+      },
+      "effect": "write",
+      "effectSource": "verb"
+    },
+    {
+      "name": "UnlockClassTestClassesLow",
+      "verb": "Unlock",
+      "subject": "ClassTestClasses",
+      "family": "ClassTestClasses",
+      "layer": "low",
+      "hasHighSibling": false,
+      "requires": {
+        "lockHandle": true,
+        "session": true
+      },
+      "effect": "write",
+      "effectSource": "verb"
+    },
+    {
+      "name": "UnlockDataElementLow",
+      "verb": "Unlock",
+      "subject": "DataElement",
+      "family": "DataElement",
+      "layer": "low",
+      "hasHighSibling": false,
+      "requires": {
+        "lockHandle": true,
+        "session": true
+      },
+      "effect": "write",
+      "effectSource": "verb"
+    },
+    {
+      "name": "UnlockDomainLow",
+      "verb": "Unlock",
+      "subject": "Domain",
+      "family": "Domain",
+      "layer": "low",
+      "hasHighSibling": false,
+      "requires": {
+        "lockHandle": true,
+        "session": true
+      },
+      "effect": "write",
+      "effectSource": "verb"
+    },
+    {
+      "name": "UnlockFunctionGroupLow",
+      "verb": "Unlock",
+      "subject": "FunctionGroup",
+      "family": "FunctionGroup",
+      "layer": "low",
+      "hasHighSibling": false,
+      "requires": {
+        "lockHandle": true,
+        "session": true
+      },
+      "effect": "write",
+      "effectSource": "verb"
+    },
+    {
+      "name": "UnlockFunctionModuleLow",
+      "verb": "Unlock",
+      "subject": "FunctionModule",
+      "family": "FunctionModule",
+      "layer": "low",
+      "hasHighSibling": false,
+      "requires": {
+        "lockHandle": true,
+        "session": true
+      },
+      "effect": "write",
+      "effectSource": "verb"
+    },
+    {
+      "name": "UnlockGuiStatusLow",
+      "verb": "Unlock",
+      "subject": "GuiStatus",
+      "family": "GuiStatus",
+      "layer": "low",
+      "hasHighSibling": false,
+      "requires": {
+        "lockHandle": true,
+        "session": true
+      },
+      "effect": "write",
+      "effectSource": "verb"
+    },
+    {
+      "name": "UnlockInterfaceLow",
+      "verb": "Unlock",
+      "subject": "Interface",
+      "family": "Interface",
+      "layer": "low",
+      "hasHighSibling": false,
+      "requires": {
+        "lockHandle": true,
+        "session": true
+      },
+      "effect": "write",
+      "effectSource": "verb"
+    },
+    {
+      "name": "UnlockMetadataExtensionLow",
+      "verb": "Unlock",
+      "subject": "MetadataExtension",
+      "family": "MetadataExtension",
+      "layer": "low",
+      "hasHighSibling": false,
+      "requires": {
+        "lockHandle": true,
+        "session": true
+      },
+      "effect": "write",
+      "effectSource": "verb"
+    },
+    {
+      "name": "UnlockObjectLow",
+      "verb": "Unlock",
+      "subject": "Object",
+      "family": "Object",
+      "layer": "low",
+      "hasHighSibling": false,
+      "requires": {
+        "lockHandle": true,
+        "session": true
+      },
+      "effect": "write",
+      "effectSource": "verb"
+    },
+    {
+      "name": "UnlockPackageLow",
+      "verb": "Unlock",
+      "subject": "Package",
+      "family": "Package",
+      "layer": "low",
+      "hasHighSibling": false,
+      "requires": {
+        "lockHandle": true,
+        "session": true
+      },
+      "effect": "write",
+      "effectSource": "verb"
+    },
+    {
+      "name": "UnlockProgramLow",
+      "verb": "Unlock",
+      "subject": "Program",
+      "family": "Program",
+      "layer": "low",
+      "hasHighSibling": false,
+      "requires": {
+        "lockHandle": true,
+        "session": true
+      },
+      "effect": "write",
+      "effectSource": "verb"
+    },
+    {
+      "name": "UnlockScreenLow",
+      "verb": "Unlock",
+      "subject": "Screen",
+      "family": "Screen",
+      "layer": "low",
+      "hasHighSibling": false,
+      "requires": {
+        "lockHandle": true,
+        "session": true
+      },
+      "effect": "write",
+      "effectSource": "verb"
+    },
+    {
+      "name": "UnlockStructureLow",
+      "verb": "Unlock",
+      "subject": "Structure",
+      "family": "Structure",
+      "layer": "low",
+      "hasHighSibling": false,
+      "requires": {
+        "lockHandle": true,
+        "session": true
+      },
+      "effect": "write",
+      "effectSource": "verb"
+    },
+    {
+      "name": "UnlockTableLow",
+      "verb": "Unlock",
+      "subject": "Table",
+      "family": "Table",
+      "layer": "low",
+      "hasHighSibling": false,
+      "requires": {
+        "lockHandle": true,
+        "session": true
+      },
+      "effect": "write",
+      "effectSource": "verb"
+    },
+    {
+      "name": "UnlockCdsViewLow",
+      "verb": "Unlock",
+      "subject": "CdsView",
+      "family": "CdsView",
+      "layer": "low",
+      "hasHighSibling": false,
+      "requires": {
+        "lockHandle": true,
+        "session": true
+      },
+      "effect": "write",
+      "effectSource": "verb"
+    },
+    {
+      "name": "UpdateBehaviorDefinition",
+      "verb": "Update",
+      "subject": "BehaviorDefinition",
+      "family": "BehaviorDefinition",
+      "layer": "high",
+      "hasHighSibling": false,
+      "requires": {
+        "lockHandle": true,
+        "session": false
+      },
+      "effect": "write",
+      "effectSource": "verb"
+    },
+    {
+      "name": "UpdateBehaviorDefinitionLow",
+      "verb": "Update",
+      "subject": "BehaviorDefinition",
+      "family": "BehaviorDefinition",
+      "layer": "low",
+      "hasHighSibling": true,
+      "requires": {
+        "lockHandle": true,
+        "session": true
+      },
+      "effect": "write",
+      "effectSource": "verb"
+    },
+    {
+      "name": "UpdateBehaviorImplementation",
+      "verb": "Update",
+      "subject": "BehaviorImplementation",
+      "family": "BehaviorImplementation",
+      "layer": "high",
+      "hasHighSibling": false,
+      "requires": {
+        "lockHandle": false,
+        "session": false
+      },
+      "effect": "write",
+      "effectSource": "verb"
+    },
+    {
+      "name": "UpdateCdsUnitTest",
+      "verb": "Update",
+      "subject": "CdsUnitTest",
+      "family": "CdsUnitTest",
+      "layer": "high",
+      "hasHighSibling": false,
+      "requires": {
+        "lockHandle": false,
+        "session": false
+      },
+      "effect": "write",
+      "effectSource": "verb"
+    },
+    {
+      "name": "UpdateClass",
+      "verb": "Update",
+      "subject": "Class",
+      "family": "Class",
+      "layer": "high",
+      "hasHighSibling": false,
+      "requires": {
+        "lockHandle": false,
+        "session": false
+      },
+      "effect": "write",
+      "effectSource": "verb"
+    },
+    {
+      "name": "UpdateClassLow",
+      "verb": "Update",
+      "subject": "Class",
+      "family": "Class",
+      "layer": "low",
+      "hasHighSibling": true,
+      "requires": {
+        "lockHandle": true,
+        "session": false
+      },
+      "effect": "write",
+      "effectSource": "verb"
+    },
+    {
+      "name": "UpdateClassTestClassesLow",
+      "verb": "Update",
+      "subject": "ClassTestClasses",
+      "family": "ClassTestClasses",
+      "layer": "low",
+      "hasHighSibling": false,
+      "requires": {
+        "lockHandle": true,
+        "session": true
+      },
+      "effect": "write",
+      "effectSource": "verb"
+    },
+    {
+      "name": "UpdateDataElement",
+      "verb": "Update",
+      "subject": "DataElement",
+      "family": "DataElement",
+      "layer": "high",
+      "hasHighSibling": false,
+      "requires": {
+        "lockHandle": false,
+        "session": false
+      },
+      "effect": "write",
+      "effectSource": "verb"
+    },
+    {
+      "name": "UpdateDataElementLow",
+      "verb": "Update",
+      "subject": "DataElement",
+      "family": "DataElement",
+      "layer": "low",
+      "hasHighSibling": true,
+      "requires": {
+        "lockHandle": true,
+        "session": true
+      },
+      "effect": "write",
+      "effectSource": "verb"
+    },
+    {
+      "name": "UpdateDomain",
+      "verb": "Update",
+      "subject": "Domain",
+      "family": "Domain",
+      "layer": "high",
+      "hasHighSibling": false,
+      "requires": {
+        "lockHandle": false,
+        "session": false
+      },
+      "effect": "write",
+      "effectSource": "verb"
+    },
+    {
+      "name": "UpdateDomainLow",
+      "verb": "Update",
+      "subject": "Domain",
+      "family": "Domain",
+      "layer": "low",
+      "hasHighSibling": true,
+      "requires": {
+        "lockHandle": true,
+        "session": true
+      },
+      "effect": "write",
+      "effectSource": "verb"
+    },
+    {
+      "name": "UpdateFunctionGroup",
+      "verb": "Update",
+      "subject": "FunctionGroup",
+      "family": "FunctionGroup",
+      "layer": "high",
+      "hasHighSibling": false,
+      "requires": {
+        "lockHandle": false,
+        "session": false
+      },
+      "effect": "write",
+      "effectSource": "verb"
+    },
+    {
+      "name": "UpdateFunctionModule",
+      "verb": "Update",
+      "subject": "FunctionModule",
+      "family": "FunctionModule",
+      "layer": "high",
+      "hasHighSibling": false,
+      "requires": {
+        "lockHandle": false,
+        "session": false
+      },
+      "effect": "write",
+      "effectSource": "verb"
+    },
+    {
+      "name": "UpdateFunctionModuleLow",
+      "verb": "Update",
+      "subject": "FunctionModule",
+      "family": "FunctionModule",
+      "layer": "low",
+      "hasHighSibling": true,
+      "requires": {
+        "lockHandle": true,
+        "session": true
+      },
+      "effect": "write",
+      "effectSource": "verb"
+    },
+    {
+      "name": "UpdateGuiStatus",
+      "verb": "Update",
+      "subject": "GuiStatus",
+      "family": "GuiStatus",
+      "layer": "high",
+      "hasHighSibling": false,
+      "requires": {
+        "lockHandle": false,
+        "session": false
+      },
+      "effect": "write",
+      "effectSource": "verb"
+    },
+    {
+      "name": "UpdateGuiStatusLow",
+      "verb": "Update",
+      "subject": "GuiStatus",
+      "family": "GuiStatus",
+      "layer": "low",
+      "hasHighSibling": true,
+      "requires": {
+        "lockHandle": true,
+        "session": true
+      },
+      "effect": "write",
+      "effectSource": "verb"
+    },
+    {
+      "name": "UpdateInclude",
+      "verb": "Update",
+      "subject": "Include",
+      "family": "Include",
+      "layer": "high",
+      "hasHighSibling": false,
+      "requires": {
+        "lockHandle": false,
+        "session": false
+      },
+      "effect": "write",
+      "effectSource": "verb"
+    },
+    {
+      "name": "UpdateInterface",
+      "verb": "Update",
+      "subject": "Interface",
+      "family": "Interface",
+      "layer": "high",
+      "hasHighSibling": false,
+      "requires": {
+        "lockHandle": false,
+        "session": false
+      },
+      "effect": "write",
+      "effectSource": "verb"
+    },
+    {
+      "name": "UpdateInterfaceLow",
+      "verb": "Update",
+      "subject": "Interface",
+      "family": "Interface",
+      "layer": "low",
+      "hasHighSibling": true,
+      "requires": {
+        "lockHandle": true,
+        "session": true
+      },
+      "effect": "write",
+      "effectSource": "verb"
+    },
+    {
+      "name": "UpdateLocalDefinitions",
+      "verb": "Update",
+      "subject": "LocalDefinitions",
+      "family": "LocalDefinitions",
+      "layer": "high",
+      "hasHighSibling": false,
+      "requires": {
+        "lockHandle": false,
+        "session": false
+      },
+      "effect": "write",
+      "effectSource": "verb"
+    },
+    {
+      "name": "UpdateLocalMacros",
+      "verb": "Update",
+      "subject": "LocalMacros",
+      "family": "LocalMacros",
+      "layer": "high",
+      "hasHighSibling": false,
+      "requires": {
+        "lockHandle": false,
+        "session": false
+      },
+      "effect": "write",
+      "effectSource": "verb"
+    },
+    {
+      "name": "UpdateLocalTestClass",
+      "verb": "Update",
+      "subject": "LocalTestClass",
+      "family": "LocalTestClass",
+      "layer": "high",
+      "hasHighSibling": false,
+      "requires": {
+        "lockHandle": false,
+        "session": false
+      },
+      "effect": "write",
+      "effectSource": "verb"
+    },
+    {
+      "name": "UpdateLocalTypes",
+      "verb": "Update",
+      "subject": "LocalTypes",
+      "family": "LocalTypes",
+      "layer": "high",
+      "hasHighSibling": false,
+      "requires": {
+        "lockHandle": false,
+        "session": false
+      },
+      "effect": "write",
+      "effectSource": "verb"
+    },
+    {
+      "name": "UpdateMetadataExtension",
+      "verb": "Update",
+      "subject": "MetadataExtension",
+      "family": "MetadataExtension",
+      "layer": "high",
+      "hasHighSibling": false,
+      "requires": {
+        "lockHandle": true,
+        "session": false
+      },
+      "effect": "write",
+      "effectSource": "verb"
+    },
+    {
+      "name": "UpdateMetadataExtensionLow",
+      "verb": "Update",
+      "subject": "MetadataExtension",
+      "family": "MetadataExtension",
+      "layer": "low",
+      "hasHighSibling": true,
+      "requires": {
+        "lockHandle": true,
+        "session": true
+      },
+      "effect": "write",
+      "effectSource": "verb"
+    },
+    {
+      "name": "UpdatePackageLow",
+      "verb": "Update",
+      "subject": "Package",
+      "family": "Package",
+      "layer": "low",
+      "hasHighSibling": false,
+      "requires": {
+        "lockHandle": true,
+        "session": true
+      },
+      "effect": "write",
+      "effectSource": "verb"
+    },
+    {
+      "name": "UpdateProgram",
+      "verb": "Update",
+      "subject": "Program",
+      "family": "Program",
+      "layer": "high",
+      "hasHighSibling": false,
+      "requires": {
+        "lockHandle": false,
+        "session": false
+      },
+      "effect": "write",
+      "effectSource": "verb"
+    },
+    {
+      "name": "UpdateProgramLow",
+      "verb": "Update",
+      "subject": "Program",
+      "family": "Program",
+      "layer": "low",
+      "hasHighSibling": true,
+      "requires": {
+        "lockHandle": true,
+        "session": true
+      },
+      "effect": "write",
+      "effectSource": "verb"
+    },
+    {
+      "name": "UpdateScreen",
+      "verb": "Update",
+      "subject": "Screen",
+      "family": "Screen",
+      "layer": "high",
+      "hasHighSibling": false,
+      "requires": {
+        "lockHandle": false,
+        "session": false
+      },
+      "effect": "write",
+      "effectSource": "verb"
+    },
+    {
+      "name": "UpdateScreenLow",
+      "verb": "Update",
+      "subject": "Screen",
+      "family": "Screen",
+      "layer": "low",
+      "hasHighSibling": true,
+      "requires": {
+        "lockHandle": true,
+        "session": true
+      },
+      "effect": "write",
+      "effectSource": "verb"
+    },
+    {
+      "name": "UpdateServiceBinding",
+      "verb": "Update",
+      "subject": "ServiceBinding",
+      "family": "ServiceBinding",
+      "layer": "high",
+      "hasHighSibling": false,
+      "requires": {
+        "lockHandle": false,
+        "session": false
+      },
+      "effect": "write",
+      "effectSource": "verb"
+    },
+    {
+      "name": "UpdateServiceDefinition",
+      "verb": "Update",
+      "subject": "ServiceDefinition",
+      "family": "ServiceDefinition",
+      "layer": "high",
+      "hasHighSibling": false,
+      "requires": {
+        "lockHandle": false,
+        "session": false
+      },
+      "effect": "write",
+      "effectSource": "verb"
+    },
+    {
+      "name": "UpdateStructure",
+      "verb": "Update",
+      "subject": "Structure",
+      "family": "Structure",
+      "layer": "high",
+      "hasHighSibling": false,
+      "requires": {
+        "lockHandle": false,
+        "session": false
+      },
+      "effect": "write",
+      "effectSource": "verb"
+    },
+    {
+      "name": "UpdateStructureLow",
+      "verb": "Update",
+      "subject": "Structure",
+      "family": "Structure",
+      "layer": "low",
+      "hasHighSibling": true,
+      "requires": {
+        "lockHandle": true,
+        "session": true
+      },
+      "effect": "write",
+      "effectSource": "verb"
+    },
+    {
+      "name": "UpdateTable",
+      "verb": "Update",
+      "subject": "Table",
+      "family": "Table",
+      "layer": "high",
+      "hasHighSibling": false,
+      "requires": {
+        "lockHandle": false,
+        "session": false
+      },
+      "effect": "write",
+      "effectSource": "verb"
+    },
+    {
+      "name": "UpdateTableLow",
+      "verb": "Update",
+      "subject": "Table",
+      "family": "Table",
+      "layer": "low",
+      "hasHighSibling": true,
+      "requires": {
+        "lockHandle": true,
+        "session": true
+      },
+      "effect": "write",
+      "effectSource": "verb"
+    },
+    {
+      "name": "UpdateTextElement",
+      "verb": "Update",
+      "subject": "TextElement",
+      "family": "TextElement",
+      "layer": "high",
+      "hasHighSibling": false,
+      "requires": {
+        "lockHandle": false,
+        "session": false
+      },
+      "effect": "write",
+      "effectSource": "verb"
+    },
+    {
+      "name": "UpdateUnitTest",
+      "verb": "Update",
+      "subject": "UnitTest",
+      "family": "UnitTest",
+      "layer": "high",
+      "hasHighSibling": false,
+      "requires": {
+        "lockHandle": false,
+        "session": false
+      },
+      "effect": "write",
+      "effectSource": "verb"
+    },
+    {
+      "name": "UpdateCdsView",
+      "verb": "Update",
+      "subject": "CdsView",
+      "family": "CdsView",
+      "layer": "high",
+      "hasHighSibling": false,
+      "requires": {
+        "lockHandle": false,
+        "session": false
+      },
+      "effect": "write",
+      "effectSource": "verb"
+    },
+    {
+      "name": "UpdateCdsViewLow",
+      "verb": "Update",
+      "subject": "CdsView",
+      "family": "CdsView",
+      "layer": "low",
+      "hasHighSibling": true,
+      "requires": {
+        "lockHandle": true,
+        "session": true
+      },
+      "effect": "write",
+      "effectSource": "verb"
+    },
+    {
+      "name": "ValidateBehaviorDefinitionLow",
+      "verb": "Validate",
+      "subject": "BehaviorDefinition",
+      "family": "BehaviorDefinition",
+      "layer": "low",
+      "hasHighSibling": false,
+      "requires": {
+        "lockHandle": false,
+        "session": true
+      },
+      "effect": "read",
+      "effectSource": "verb"
+    },
+    {
+      "name": "ValidateBehaviorImplementationLow",
+      "verb": "Validate",
+      "subject": "BehaviorImplementation",
+      "family": "BehaviorImplementation",
+      "layer": "low",
+      "hasHighSibling": false,
+      "requires": {
+        "lockHandle": false,
+        "session": true
+      },
+      "effect": "read",
+      "effectSource": "verb"
+    },
+    {
+      "name": "ValidateClassLow",
+      "verb": "Validate",
+      "subject": "Class",
+      "family": "Class",
+      "layer": "low",
+      "hasHighSibling": false,
+      "requires": {
+        "lockHandle": false,
+        "session": true
+      },
+      "effect": "read",
+      "effectSource": "verb"
+    },
+    {
+      "name": "ValidateDataElementLow",
+      "verb": "Validate",
+      "subject": "DataElement",
+      "family": "DataElement",
+      "layer": "low",
+      "hasHighSibling": false,
+      "requires": {
+        "lockHandle": false,
+        "session": true
+      },
+      "effect": "read",
+      "effectSource": "verb"
+    },
+    {
+      "name": "ValidateDomainLow",
+      "verb": "Validate",
+      "subject": "Domain",
+      "family": "Domain",
+      "layer": "low",
+      "hasHighSibling": false,
+      "requires": {
+        "lockHandle": false,
+        "session": true
+      },
+      "effect": "read",
+      "effectSource": "verb"
+    },
+    {
+      "name": "ValidateFunctionGroupLow",
+      "verb": "Validate",
+      "subject": "FunctionGroup",
+      "family": "FunctionGroup",
+      "layer": "low",
+      "hasHighSibling": false,
+      "requires": {
+        "lockHandle": false,
+        "session": true
+      },
+      "effect": "read",
+      "effectSource": "verb"
+    },
+    {
+      "name": "ValidateFunctionModuleLow",
+      "verb": "Validate",
+      "subject": "FunctionModule",
+      "family": "FunctionModule",
+      "layer": "low",
+      "hasHighSibling": false,
+      "requires": {
+        "lockHandle": false,
+        "session": true
+      },
+      "effect": "read",
+      "effectSource": "verb"
+    },
+    {
+      "name": "ValidateInterfaceLow",
+      "verb": "Validate",
+      "subject": "Interface",
+      "family": "Interface",
+      "layer": "low",
+      "hasHighSibling": false,
+      "requires": {
+        "lockHandle": false,
+        "session": true
+      },
+      "effect": "read",
+      "effectSource": "verb"
+    },
+    {
+      "name": "ValidateMetadataExtensionLow",
+      "verb": "Validate",
+      "subject": "MetadataExtension",
+      "family": "MetadataExtension",
+      "layer": "low",
+      "hasHighSibling": false,
+      "requires": {
+        "lockHandle": false,
+        "session": true
+      },
+      "effect": "read",
+      "effectSource": "verb"
+    },
+    {
+      "name": "ValidateObjectLow",
+      "verb": "Validate",
+      "subject": "Object",
+      "family": "Object",
+      "layer": "low",
+      "hasHighSibling": false,
+      "requires": {
+        "lockHandle": false,
+        "session": true
+      },
+      "effect": "read",
+      "effectSource": "verb"
+    },
+    {
+      "name": "ValidatePackageLow",
+      "verb": "Validate",
+      "subject": "Package",
+      "family": "Package",
+      "layer": "low",
+      "hasHighSibling": false,
+      "requires": {
+        "lockHandle": false,
+        "session": true
+      },
+      "effect": "read",
+      "effectSource": "verb"
+    },
+    {
+      "name": "ValidateProgramLow",
+      "verb": "Validate",
+      "subject": "Program",
+      "family": "Program",
+      "layer": "low",
+      "hasHighSibling": false,
+      "requires": {
+        "lockHandle": false,
+        "session": true
+      },
+      "effect": "read",
+      "effectSource": "verb"
+    },
+    {
+      "name": "ValidateServiceBinding",
+      "verb": "Validate",
+      "subject": "ServiceBinding",
+      "family": "ServiceBinding",
+      "layer": "high",
+      "hasHighSibling": false,
+      "requires": {
+        "lockHandle": false,
+        "session": false
+      },
+      "effect": "read",
+      "effectSource": "verb"
+    },
+    {
+      "name": "ValidateStructureLow",
+      "verb": "Validate",
+      "subject": "Structure",
+      "family": "Structure",
+      "layer": "low",
+      "hasHighSibling": false,
+      "requires": {
+        "lockHandle": false,
+        "session": true
+      },
+      "effect": "read",
+      "effectSource": "verb"
+    },
+    {
+      "name": "ValidateTableLow",
+      "verb": "Validate",
+      "subject": "Table",
+      "family": "Table",
+      "layer": "low",
+      "hasHighSibling": false,
+      "requires": {
+        "lockHandle": false,
+        "session": true
+      },
+      "effect": "read",
+      "effectSource": "verb"
+    },
+    {
+      "name": "ValidateCdsViewLow",
+      "verb": "Validate",
+      "subject": "CdsView",
+      "family": "CdsView",
+      "layer": "low",
+      "hasHighSibling": false,
+      "requires": {
+        "lockHandle": false,
+        "session": true
+      },
+      "effect": "read",
+      "effectSource": "verb"
+    },
+    {
+      "name": "WriteTextElementsBulk",
+      "verb": "Write",
+      "subject": "TextElementsBulk",
+      "family": "TextElementsBulk",
+      "layer": "high",
+      "hasHighSibling": false,
+      "requires": {
+        "lockHandle": false,
+        "session": false
+      },
+      "effect": "write",
+      "effectSource": "verb"
+    }
+  ]
+}

@@ -1,0 +1,40 @@
+NOTICE
+======
+
+abap-adt-mcp-gateway exposes an ADT MCP tool contract (335 tool names,
+descriptions and parameter schemas in tools/catalog.json) derived from the
+MIT-licensed packages below. Their copyright notices are reproduced here as
+required by the MIT license.
+
+The packages themselves are NOT bundled, vendored or installed as dependencies
+of this project. They are referenced only as provenance for the tool contract.
+
+This project is an independent reimplementation: the server code, the ABAP
+bridge modules and the documentation are original work, behaviourally
+compatible with the packages below. Those packages remain under their own
+copyright and are attributed here.
+
+
+MIT-licensed upstream packages
+------------------------------
+
+@babamba2/abap-mcp-adt-powerup          4.8.14   Copyright (c) 2026 백승현 (Paek Seunghyun)
+@babamba2/mcp-abap-adt-clients          3.15.0   Copyright (c) 2025 Oleksii Kyslytsia
+@babamba2/mcp-abap-connection           1.5.3    Copyright (c) 2025 Oleksii Kyslytsia
+@babamba2/mcp-abap-adt-interfaces       5.0.0    Copyright (c) 2024 Oleksii Kyslytsia
+@babamba2/mcp-abap-adt-logger           0.1.4    Copyright (c) 2024 Oleksii Kyslytsia
+@babamba2/mcp-abap-adt-auth-broker      1.0.5    Copyright (c) 2025 Oleksii Kyslytsia
+@babamba2/mcp-abap-adt-auth-providers   1.0.5    Copyright (c) 2025 Oleksii Kyslytsia
+@babamba2/mcp-abap-adt-auth-stores      1.0.4    Copyright (c) 2025 Oleksii Kyslytsia
+@babamba2/mcp-abap-adt-header-validator 0.1.8    Copyright (c) 2025 Oleksii Kyslytsia
+
+All nine packages are distributed under the MIT License. The full text of the
+MIT License applicable to them is the same as the text in LICENSE, with the
+copyright holder replaced by the line listed above for each package.
+
+
+No affiliation
+--------------
+
+This project is not affiliated with, endorsed by, or sponsored by SAP SE,
+by the authors of the packages listed above, or by any SAP customer.

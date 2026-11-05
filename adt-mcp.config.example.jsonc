@@ -1,0 +1,113 @@
+{
+  "$schema": "./adt-mcp.schema.json",
+
+  "server": {
+    "name": "abap-adt-mcp-gateway",
+    "logLevel": "info"
+  },
+
+  "defaultSystem": "dev",
+
+  // Visibility only, not authorisation. Layers pick which kinds of tool exist for this
+  // client (readonly / write / low); allow + deny narrow it; gateway adds the three
+  // Gateway* tools that reach the whole contract by name. Clients hand the model a
+  // bounded list (some stop at 128), so this advertises 127 of the 335.
+  // Regenerate with: node tools/scripts/tool-presets.mjs --preset core
+  "toolPolicy": {
+    "timeoutMs": 180000,
+    "gateway": true,
+    "layers": [
+      "readonly",
+      "write"
+    ],
+    "allow": [
+      "SearchObject",
+      "GetObjectInfo",
+      "GetObjectStructure",
+      "GetTypeInfo",
+      "GetPackageContents",
+      "GetPackageTree",
+      "GetWhereUsed",
+      "GetProgFullCode",
+      "GetInactiveObjects",
+      "GetSqlQuery",
+      "GetTableContents",
+      "GetObjectsByType",
+      "ActivateObjects",
+      "GetTransport",
+      "ListTransports",
+      "CreateTransport",
+      "GetSession",
+      "RunUnitTest",
+      "GetUnitTest",
+      "GetUnitTestResult",
+      "GetUnitTestStatus",
+      "GetTcodeUsage",
+      "GetJobUsage",
+      "RuntimeListDumps",
+      "RuntimeGetDumpById",
+      "RuntimeAnalyzeDump",
+      "*Program",
+      "*Include",
+      "*Class",
+      "*Interface",
+      "*FunctionGroup",
+      "*FunctionModule",
+      "*Table",
+      "*Structure",
+      "*DataElement",
+      "*Domain",
+      "*View",
+      "*MetadataExtension",
+      "*BehaviorDefinition",
+      "*BehaviorImplementation",
+      "*ServiceDefinition",
+      "*ServiceBinding",
+      "*Screen",
+      "*GuiStatus",
+      "*TextElement"
+    ],
+    "deny": [
+      "Handler*"
+    ]
+  },
+
+  "systems": [
+    {
+      "id": "dev",
+      "label": "development client (writable)",
+      "tier": "DEV",
+      "endpoint": {
+        "url": "https://sap.example.com:44300",
+        "client": "100",
+        "language": "ZH",
+        "systemType": "onprem"
+      },
+      "auth": {
+        "type": "basic",
+        "username": "env:ADT_USER",
+        "password": "keychain:abap-adt-mcp-gateway/dev"
+      },
+      "rfcBackend": "soap",
+      "env": {}
+    },
+    {
+      "id": "qa",
+      "label": "quality client (read-only)",
+      "tier": "QA",
+      "endpoint": {
+        "url": "https://sap.example.com:44300",
+        "client": "200",
+        "language": "ZH",
+        "systemType": "onprem"
+      },
+      "auth": {
+        "type": "basic",
+        "username": "env:ADT_USER",
+        "password": "keychain:abap-adt-mcp-gateway/qa"
+      },
+      "rfcBackend": "soap",
+      "env": {}
+    }
+  ]
+}

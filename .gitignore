@@ -1,0 +1,26 @@
+node_modules/
+dist/
+*.tsbuildinfo
+
+# upstream provenance ledger, not part of the build
+_local/
+
+# local machine config, never committed
+adt-mcp.config.jsonc
+adt-mcp.config.local.jsonc
+.adt-mcp/
+profiles/
+*.local.jsonc
+.adt-mcp-secrets*
+
+# audit / logs
+audit.jsonl
+*.log
+logs/
+
+# editors / os
+.vscode/*
+!.vscode/settings.json.example
+.idea/
+.DS_Store
+Thumbs.db

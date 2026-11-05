@@ -1,0 +1,76 @@
+{
+  "name": "abap-adt-mcp-gateway",
+  "version": "0.2.0",
+  "description": "Multi-system ABAP ADT MCP gateway: one MCP server for many SAP systems, one ADT session per system, a fixed 335-tool contract.",
+  "type": "module",
+  "license": "MIT",
+  "author": "rogerix4",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/rogerix4/abap-adt-mcp-gateway.git"
+  },
+  "bugs": {
+    "url": "https://github.com/rogerix4/abap-adt-mcp-gateway/issues"
+  },
+  "homepage": "https://github.com/rogerix4/abap-adt-mcp-gateway#readme",
+  "engines": {
+    "node": ">=20.11"
+  },
+  "bin": {
+    "abap-adt-mcp-gateway": "dist/bin.js"
+  },
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "dist",
+    "tools/catalog.json",
+    "adt-mcp.schema.json",
+    "adt-mcp.config.example.jsonc",
+    "README.md",
+    "CHANGELOG.md",
+    "LICENSE",
+    "NOTICE"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "check": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "analyze": "node tools/scripts/analyze-catalog.mjs",
+    "gen:layer-map": "node tools/scripts/gen-layer-map.mjs",
+    "gen:schema": "node tools/scripts/gen-schema.mjs",
+    "gen:tools": "node tools/scripts/gen-tools-doc.mjs",
+    "preset:core": "node tools/scripts/tool-presets.mjs --preset core",
+    "status": "node tools/scripts/mcp-status.mjs",
+    "verify:catalog": "node tools/scripts/verify-catalog.mjs",
+    "verify:private": "node tools/scripts/scan-private.mjs",
+    "verify:deprecated": "node tools/scripts/check-deprecated.mjs",
+    "verify:schema": "npm run build && node tools/scripts/gen-schema.mjs --check",
+    "verify:docs": "node tools/scripts/gen-tools-doc.mjs --check",
+    "verify": "npm run verify:catalog && npm run verify:private && npm run verify:deprecated && npm run check && npm run verify:schema && npm run verify:docs && npm test",
+    "live:smoke": "node tools/scripts/live-smoke.mjs",
+    "live:families": "node tools/scripts/live-families.mjs"
+  },
+  "dependencies": {
+    "@abaplint/core": "^2.120.92",
+    "@modelcontextprotocol/sdk": "^1.32.2",
+    "zod": "^3.23.8"
+  },
+  "optionalDependencies": {
+    "@napi-rs/keyring": "^1.1.6"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "typescript": "^5.7.2",
+    "vitest": "^2.1.8",
+    "zod-to-json-schema": "^3.25.2"
+  },
+  "keywords": [
+    "abap",
+    "adt",
+    "sap",
+    "mcp",
+    "model-context-protocol"
+  ]
+}
+

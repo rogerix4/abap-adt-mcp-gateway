@@ -1,0 +1,7 @@
+# Keep the repository LF-only regardless of the platform that checks it out.
+* text=auto eol=lf
+
+# Generated data files are compared byte for byte by the verify scripts.
+tools/catalog.json   text eol=lf
+tools/layer-map.json text eol=lf
+adt-mcp.schema.json  text eol=lf
