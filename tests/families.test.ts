@@ -413,16 +413,26 @@ describe("read-modify-write updates", () => {
   });
 });
 
-describe("service binding create media negotiation", () => {
-  it("retries the POST with Accept: */* when the release rejects the advertised type", async () => {
-    // Measured on release 754: POST /businessservices/bindings answers 415 for
-    // the v2 media type, although GET of an existing binding returns v2.
+const SERVICE_DEFINITION = { status: 200, body: "<srvd:serviceDefinition/>" };
+const BINDING_TYPES_V2 =
+  '<?xml version="1.0" encoding="utf-8"?>' +
+  '<nameditem:namedItemList xmlns:nameditem="http://www.sap.com/adt/nameditem">' +
+  "<nameditem:namedItem><nameditem:name>ODATA</nameditem:name>" +
+  "<nameditem:description>1</nameditem:description>" +
+  "<nameditem:data>ODATA V2</nameditem:data></nameditem:namedItem>" +
+  "</nameditem:namedItemList>";
+
+describe("service binding lifecycle", () => {
+  it("preflights, negotiates the media type and generates the service after activation", async () => {
     const { impl, calls } = scriptedFetch([
-      CSRF,
+      SERVICE_DEFINITION,
+      { status: 200, body: BINDING_TYPES_V2 },
+      CSRF, // fetched before the first POST
       { status: 415, body: "<message>Unsupported Media Type</message>" },
       { status: 415, body: "<message>Unsupported Media Type</message>" }, // Accept: */* retry, still v2
-      { status: 201, body: "" }, // POST create, retried with the v1+v2 Accept list
+      { status: 201, body: "" }, // POST create, retried with the v1 media type
       { status: 200, body: "" }, // activation
+      { status: 200, body: "<edmx:Edmx/>" }, // generate
     ]);
     const { registry } = build(impl);
 
@@ -435,9 +445,11 @@ describe("service binding create media negotiation", () => {
         binding_type: "ODataV2",
       },
       { system: "probe" },
-    )) as { success: boolean };
+    )) as { success: boolean; activated: boolean; generated_info?: string };
 
     expect(created.success).toBe(true);
+    expect(created.activated).toBe(true);
+    expect(created.generated_info).toContain("Edmx");
     const posts = calls.filter((call) => call.method === "POST" && call.url.endsWith("/businessservices/bindings"));
     expect(posts).toHaveLength(3);
     expect(posts[0]?.headers.accept).toBe("application/vnd.sap.adt.businessservices.servicebinding.v2+xml");
@@ -447,6 +459,89 @@ describe("service binding create media negotiation", () => {
     expect(posts[2]?.headers["content-type"]).toBe(
       "application/vnd.sap.adt.businessservices.servicebinding.v1+xml",
     );
+    expect(calls.some((call) => call.url.includes("/businessservices/odatav2/ZSVC_PROBE"))).toBe(true);
+  });
+
+  it("honours activate:false and does not generate an inactive binding", async () => {
+    const { impl, calls } = scriptedFetch([
+      SERVICE_DEFINITION,
+      { status: 200, body: BINDING_TYPES_V2 },
+      CSRF, // fetched before the create POST
+      { status: 201, body: "" }, // POST create only
+    ]);
+    const { registry } = build(impl);
+
+    const created = (await registry.call(
+      "CreateServiceBinding",
+      {
+        service_binding_name: "ZSVC_STAGED",
+        service_definition_name: "ZSVC_SRVD_PROBE",
+        package_name: "$TMP",
+        binding_type: "ODataV2",
+        activate: false,
+      },
+      { system: "probe" },
+    )) as { success: boolean; activated: boolean; activation_note?: string };
+
+    expect(created.success).toBe(true);
+    expect(created.activated).toBe(false);
+    expect(created.activation_note).toContain("activate=false");
+    expect(calls.some((call) => call.url.includes("/activation?method=activate"))).toBe(false);
+    expect(calls.some((call) => call.url.includes("/businessservices/odatav2/"))).toBe(false);
+  });
+
+  it("rejects a binding type the system does not publish before creating a shell", async () => {
+    const { impl, calls } = scriptedFetch([SERVICE_DEFINITION, { status: 200, body: BINDING_TYPES_V2 }]);
+    const { registry } = build(impl);
+
+    await expect(
+      registry.call(
+        "CreateServiceBinding",
+        {
+          service_binding_name: "ZSVC_V4",
+          service_definition_name: "ZSVC_SRVD_PROBE",
+          package_name: "$TMP",
+          binding_type: "ODataV4",
+        },
+        { system: "probe" },
+      ),
+    ).rejects.toMatchObject({ code: "INVALID_ARGUMENT", message: expect.stringContaining("not available") });
+
+    expect(calls.some((call) => call.method === "POST" && call.url.endsWith("/businessservices/bindings"))).toBe(false);
+  });
+
+  it("unpublishes a published binding before deleting it", async () => {
+    const published =
+      '<?xml version="1.0" encoding="utf-8"?>' +
+      '<srvb:serviceBinding xmlns:srvb="http://www.sap.com/adt/ddic/ServiceBindings" ' +
+      'xmlns:adtcore="http://www.sap.com/adt/core" srvb:published="true" srvb:allowedAction="UNPUBLISH">' +
+      '<srvb:services srvb:name="ZSVC_PROBE"><srvb:content srvb:version="0001">' +
+      '<srvb:serviceDefinition adtcore:name="ZSVC_SRVD_PROBE"/></srvb:content></srvb:services>' +
+      '<srvb:binding srvb:type="ODATA" srvb:version="V2"><srvb:implementation adtcore:name="ZSVC_PROBE"/></srvb:binding>' +
+      "</srvb:serviceBinding>";
+    const { impl, calls } = scriptedFetch([
+      { status: 200, body: published }, // beforeDelete read
+      CSRF, // fetched before the unpublish POST
+      { status: 200, body: "<SEVERITY>OK</SEVERITY>" }, // unpublish job
+      { status: 200, body: "<DATA><LOCK_HANDLE>H1</LOCK_HANDLE></DATA>" }, // lock
+      { status: 200, body: "" }, // DELETE
+      { status: 200, body: "" }, // unlock
+    ]);
+    const { registry } = build(impl);
+
+    const deleted = (await registry.call(
+      "DeleteServiceBinding",
+      { service_binding_name: "ZSVC_PROBE" },
+      { system: "probe" },
+    )) as { success: boolean; pre_delete?: { unpublished?: boolean } };
+
+    expect(deleted.success).toBe(true);
+    expect(deleted.pre_delete?.unpublished).toBe(true);
+    const unpublish = calls.find((call) => call.method === "POST" && call.url.includes("/unpublishjobs"));
+    expect(unpublish?.url).toContain("servicename=ZSVC_PROBE");
+    expect(unpublish?.url).toContain("serviceversion=0001");
+    const deleteCall = calls.find((call) => call.method === "DELETE");
+    expect(deleteCall?.url).toContain("lockHandle=H1");
   });
 });
 

@@ -117,6 +117,16 @@ export interface ObjectFamily {
   readonly createMediaFallbacks?: readonly { readonly accept: string; readonly contentType: string }[];
   /** Builds the create request body. Absent for families created some other way. */
   readonly createBody?: (context: CreateContext) => string;
+  /**
+   * Preflight that must pass before the create POST.
+   *
+   * Service bindings use it for the service definition, the installed binding type
+   * and the CTS transport check; a failure here must not leave a shell behind.
+   */
+  readonly beforeCreate?: (
+    session: import("../adt/session.js").AdtSession,
+    context: CreateContext,
+  ) => Promise<void | Readonly<Record<string, unknown>>>;
   /** Envelope form, used when the body is the generic `createBody` shape. */
   readonly envelope?: CreateEnvelope;
   /** Update payload: plain text source, or a body built from the arguments. */
@@ -160,6 +170,16 @@ export interface ObjectFamily {
    * non-empty".
    */
   readonly verification?: "content" | "readable" | "normalized";
+  /**
+   * Work that must happen before a high-level delete.
+   *
+   * Service bindings use it to unpublish a published binding, which the generic
+   * DELETE cannot do; a failure here must abort the delete.
+   */
+  readonly beforeDelete?: (
+    session: import("../adt/session.js").AdtSession,
+    context: CreateContext,
+  ) => Promise<void | Readonly<Record<string, unknown>>>;
   /**
    * Extra work right after the object was created.
    *

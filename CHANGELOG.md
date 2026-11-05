@@ -37,6 +37,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `README` §Architecture and `docs/ARCHITECTURE.md` now describe the multi-system model: every
   configured system keeps a live ADT session, reads are never queued, and writes queue per
   system.
+- **The CDS family is named `CdsView`.** The 13 former `View*` tools are not registered as
+  aliases; callers migrate to `CdsView*`. This is a deliberate breaking rename in the
+  frozen 335-tool contract.
 
 ### Added
 
@@ -78,14 +81,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `SELECT`, caps `row_number` at 5000, requests one extra row so `truncated` reflects
   whether more rows exist, and maps syntax or temporary-pool failures to
   `INVALID_ARGUMENT` / `UPSTREAM_FAILED` with actionable guidance.
-- **Service binding creation negotiates the media type required by release 754.**
-  `POST /businessservices/bindings` rejects the v2 media type with 415 on that release
-  even though GET returns v2. Creation now retries with the v1 media type and the archived
-  client's XML shape; newer releases continue to use the v2 request first.
-- **Service binding deletion verifies the object is gone before reporting success.**
-  If the generic DELETE returns 412, the gateway releases the lock, calls the deletion
-  resource, and reads the binding back. A request that SAP accepts but does not execute is
-  reported as `412` with the reason, not as `success: true`.
+- **Service binding creation performs the same preflight as the archived client.**
+  It verifies the service definition and the installed OData binding type, runs the CTS
+  check for transportable packages, then retries the media type required by release 754
+  and generates the OData service metadata after activation. `activate:false` now stages
+  the binding without activating it; the previous generic path activated it regardless.
+- **Service binding deletion unpublishes and verifies before reporting success.** A
+  published binding is unpublished before the lock/delete pair. If the generic DELETE
+  returns 412, the gateway releases the lock, calls the deletion resource, and reads the
+  binding back. A request that SAP accepts but does not execute is reported as `412` with
+  the reason, not as `success: true`.
+- **`Create*` honours `activate:false`.** The flag is applied in the shared create path,
+  so a staged object is not activated or post-processed by an activation hook.
 - **`CreateSmartForm` no longer reports a stored-but-ungenerated form as success.** When
   activation returns an active form without a generated function module, the tool answers
   `UPSTREAM_FAILED` with the form interface check as the next action, instead of leaving

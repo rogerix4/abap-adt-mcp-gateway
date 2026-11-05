@@ -249,12 +249,22 @@ async function dispatch(
     case "Delete": {
       const resolved = runtime.resolve(ctx.system, sessionId, true);
       const transport = typeof args["transport_request"] === "string" ? (args["transport_request"] as string) : undefined;
+      // A published service binding cannot be deleted directly; the old client
+      // unpublished it first. A failure here aborts before the lock/delete pair.
+      const beforeDelete =
+        family.beforeDelete === undefined
+          ? undefined
+          : await family.beforeDelete(
+              resolved.session,
+              createContext(args, family, resolved.language, "Delete", resolved.session.username),
+            );
       const result = await deleteObject(resolved.session, objectPath, transport);
       if (result.deleted) await dropSessionIfEnqueuing(runtime, family);
       return {
         success: result.deleted,
         name,
         status: result.status,
+        ...(beforeDelete === undefined ? {} : { pre_delete: beforeDelete }),
         ...(result.detail === undefined ? {} : { detail: result.detail }),
         ...(result.lock_released === undefined ? {} : { lock_released: result.lock_released }),
         ...(result.lock_error === undefined ? {} : { lock_error: result.lock_error }),
@@ -456,6 +466,12 @@ async function create(context: DispatchContext, low: boolean, name: string): Pro
   /** What the family's hooks measured, merged into the result below. */
   let extra: Readonly<Record<string, unknown>> = {};
 
+  // A preflight must finish before the POST: a rejected service binding must not
+  // leave an unreferenced shell in the package.
+  if (family.beforeCreate !== undefined) {
+    extra = { ...extra, ...((await family.beforeCreate(resolved.session, create)) ?? {}) };
+  }
+
   // Service binding creation on release 754 answers 415 to the v2 media type
   // even though GET returns v2. `Accept: */*` alone does not help there; the
   // same body has to be sent as v1. A 415 means SAP did not process the request,
@@ -491,24 +507,32 @@ async function create(context: DispatchContext, low: boolean, name: string): Pro
   // way is readable immediately. Activating here makes the object usable no
   // matter which family it is; a family whose content cannot be activated yet
   // reports `activated: false` instead of failing the create.
+  //
+  // `activate:false` is part of several create schemas (service binding, CDS view,
+  // domain, ...). Ignoring it silently activated a service binding that the caller
+  // explicitly wanted staged, so the flag is honoured here rather than per family.
+  const shouldActivate = args["activate"] !== false;
   let activated = false;
   let activationNote: string | undefined;
-  try {
-    const report = await activate(resolved.session, [
-      { uri: `/sap/bc/adt${objectPath}`, name, adtType: family.adtType },
-    ]);
-    activated = report.ok;
-    if (!report.ok) activationNote = report.status;
-  } catch (error) {
-    activationNote = error instanceof Error ? error.message : String(error);
+  if (!shouldActivate) {
+    activationNote = "activation skipped (activate=false)";
+  } else {
+    try {
+      const report = await activate(resolved.session, [
+        { uri: `/sap/bc/adt${objectPath}`, name, adtType: family.adtType },
+      ]);
+      activated = report.ok;
+      if (!report.ok) activationNote = report.status;
+    } catch (error) {
+      activationNote = error instanceof Error ? error.message : String(error);
+    }
   }
 
   if (family.afterActivate !== undefined) {
-    extra = {
-      ...extra,
-      activated,
-      ...((await family.afterActivate(resolved.session, create, objectPath)) ?? {}),
-    };
+    extra = { ...extra, activated };
+    if (shouldActivate) {
+      extra = { ...extra, ...((await family.afterActivate(resolved.session, create, objectPath)) ?? {}) };
+    }
   }
 
   // A package stays enqueued to the creating session, so the next write in that same

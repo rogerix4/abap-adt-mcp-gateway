@@ -13,6 +13,12 @@ import { escapeXml, lower, renderCreateBody, type CreateContext, type ObjectFami
 import { GatewayError } from "../engine/errors.js";
 import { activate, lockObject, readSource, runCheck, unlockObject, writeSource } from "../adt/lifecycle.js";
 import { patchAttribute, patchBlock, patchElement } from "../adt/xml-patch.js";
+import {
+  generateServiceBinding,
+  preflightServiceBinding,
+  transportCheckServiceBinding,
+  unpublishServiceBinding,
+} from "./service-binding.js";
 
 const ADTPATH = (path: string) => path;
 const sourceOf = (objectPath: string) => `${objectPath}/source/main`;
@@ -1081,6 +1087,12 @@ export function serviceBindingFamily(): ObjectFamily {
     collectionPath: "/businessservices/bindings",
     media: { accept: media, contentType: media },
     createMediaFallbacks: [{ accept: "*/*", contentType: v1 }],
+    beforeCreate: async (session, context) => ({
+      ...(await preflightServiceBinding(session, context)),
+      ...(await transportCheckServiceBinding(session, context)),
+    }),
+    afterActivate: async (session, context) => generateServiceBinding(session, context),
+    beforeDelete: async (session, context) => unpublishServiceBinding(session, context),
     // Shape taken from the archived client: `srvb:services/srvb:content` carries
     // one `srvb:serviceDefinition` by name, and `srvb:binding` is a sibling.
     // Measured 2026-11-04: the v2-only shape (extra content attributes plus
