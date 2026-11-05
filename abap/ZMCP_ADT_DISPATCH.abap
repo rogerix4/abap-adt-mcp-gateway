@@ -465,7 +465,8 @@ FORM cua_write USING    iv_params  TYPE string
         END OF ls_cua.
 
   DATA: lv_program TYPE syrepid,   " program name (upper case)
-        lv_lang    TYPE sy-langu.  " target language
+        lv_lang    TYPE sy-langu,  " target language
+        ls_trkey   TYPE trkey.     " transport object key (mandatory for RS_CUA_INTERNAL_WRITE)
 
   CLEAR: ev_subrc, ev_message, ev_result.
 
@@ -495,10 +496,16 @@ FORM cua_write USING    iv_params  TYPE string
     lv_lang = ls_input-language(1).
   ENDIF.
 
+  ls_trkey-obj_type = 'PROG'.
+  ls_trkey-obj_name = lv_program.
+  ls_trkey-sub_type = 'PROG'.
+  ls_trkey-sub_name = lv_program.
+
   CALL FUNCTION 'RS_CUA_INTERNAL_WRITE'
     EXPORTING
       program  = lv_program
       language = lv_lang
+      tr_key   = ls_trkey
       adm      = ls_cua-adm
       state    = 'A'
     TABLES

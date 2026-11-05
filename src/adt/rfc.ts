@@ -168,6 +168,8 @@ export class RfcBridge {
         "UPSTREAM_FAILED",
         `${fmName} error (action=${String(params.IV_ACTION ?? "?")}, subrc=${subrc}): ${message || "no message"}`,
         {
+          action: String(params.IV_ACTION ?? ""),
+          subrc,
           ...(result === undefined ? {} : { result }),
           // subrc=8 is the dispatcher's own "the action could not be run" — only then is
           // "is the bridge active?" the right question. A 4 is an ordinary refusal.
@@ -179,4 +181,17 @@ export class RfcBridge {
     }
     return { subrc, message, result };
   }
+}
+
+/**
+ * True when the bridge answered "there is no CUA for this program" (`sy-subrc = 1`
+ * from `RS_CUA_INTERNAL_FETCH`). That is an empty answer, not a failure: the caller
+ * can start from an empty document or report `count: 0`.
+ */
+export function isCuaMissingError(error: unknown): boolean {
+  if (!(error instanceof GatewayError)) return false;
+  const action = error.details?.["action"];
+  const subrc = error.details?.["subrc"];
+  if (action === "CUA_FETCH" && subrc === 1) return true;
+  return /\(action=CUA_FETCH, subrc=1\)/.test(error.message);
 }

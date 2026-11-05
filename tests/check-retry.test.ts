@@ -108,6 +108,45 @@ describe("the check answer", () => {
     expect(result.errors).toBe(2);
   });
 
+  it("falls back to the active version when the inactive version is empty", async () => {
+    const checkBodies: string[] = [];
+    const fetchImpl = (async (input: RequestInfo | URL) => {
+      const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
+      if (url.includes("/discovery")) {
+        return new Response("<ok/>", { status: 200, headers: { "x-csrf-token": "token" } });
+      }
+      if (url.includes("/source/main?version=inactive")) {
+        return new Response("", { status: 200, headers: { "x-csrf-token": "token" } });
+      }
+      if (url.includes("/source/main?version=active")) {
+        return new Response("REPORT zz_probe.\n", {
+          status: 200,
+          headers: { "x-csrf-token": "token", "content-type": "text/plain" },
+        });
+      }
+      checkBodies.push(url);
+      const body =
+        checkBodies.length === 1
+          ? answer(message("The REPORT/PROGRAM statement is missing, or the program type is INCLUDE"))
+          : answer();
+      return new Response(body, { status: 200, headers: { "x-csrf-token": "token" } });
+    }) as typeof fetch;
+    const session = new AdtSession({
+      url: "https://sap.example.com:44300",
+      client: "100",
+      language: "EN",
+      username: "U",
+      password: "P",
+      fetchImpl,
+    });
+
+    const result = await runCheck(session, URI, "inactive");
+
+    expect(checkBodies).toHaveLength(2);
+    expect(result.errors).toBe(0);
+    expect(result.version).toBe("active");
+  });
+
   it("is read when SAP spells the message as a self-closing checkMessage", async () => {
     // Measured 2026-11-04 on a CDS view: the reporter answers
     // `<chkrun:checkMessage chkrun:type="E" chkrun:shortText="…" …/>` — a different

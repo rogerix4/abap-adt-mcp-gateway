@@ -13,7 +13,7 @@
 import type { ToolRegistry, ToolContext } from "../engine/registry.js";
 import type { GatewayRuntime } from "../runtime.js";
 import { GatewayError } from "../engine/errors.js";
-import { RfcBridge } from "../adt/rfc.js";
+import { isCuaMissingError, RfcBridge } from "../adt/rfc.js";
 import { activate, deleteObject, lockObject, unlockObject } from "../adt/lifecycle.js";
 
 /** Local includes are plain text, both ways. */
@@ -40,7 +40,7 @@ const ROW_KEYS: Readonly<Record<CuaTable, (row: CuaRow) => string>> = {
   BIV: (row) => `BIV:${String(row.CODE ?? "")}|${String(row.POS ?? "")}`,
 };
 
-interface CuaDocument {
+export interface CuaDocument {
   ADM?: CuaRow;
   [table: string]: unknown;
 }
@@ -91,27 +91,49 @@ const required = (args: Args, name: string, tool: string, alternatives: readonly
   return value;
 };
 
-/** Reads the program's CUA document; an absent one starts from an empty shell. */
+const normalizeCua = (result: unknown): CuaDocument =>
+  result !== null && typeof result === "object"
+    ? { ...emptyCua(), ...(result as CuaDocument) }
+    : emptyCua();
+
+/**
+ * Reads the CUA document and answers `undefined` when the program has none.
+ *
+ * `RS_CUA_INTERNAL_FETCH` answers `sy-subrc=1` for a program without a GUI status;
+ * that is an empty result, not a broken bridge. Callers that need an empty shell
+ * (`CreateGuiStatus`) and callers that report `count: 0` (`GetGuiStatusList`) must
+ * not turn it into `UPSTREAM_FAILED`.
+ */
+async function tryFetchCua(bridge: RfcBridge, program: string): Promise<CuaDocument | undefined> {
+  try {
+    const { result } = await bridge.dispatch("CUA_FETCH", { program });
+    return normalizeCua(result);
+  } catch (error) {
+    if (isCuaMissingError(error)) return undefined;
+    throw error;
+  }
+}
+
+/** Reads the CUA document; an absent one is an empty shell for create, an error otherwise. */
 async function fetchCua(
   bridge: RfcBridge,
   program: string,
   tool: string,
   options: { readonly required?: boolean } = {},
 ): Promise<CuaDocument> {
-  try {
-    const { result } = await bridge.dispatch("CUA_FETCH", { program });
-    if (result !== null && typeof result === "object") {
-      return { ...emptyCua(), ...(result as CuaDocument) };
-    }
-    return emptyCua();
-  } catch (error) {
-    // A program without a CUA answers sy-subrc=1 — that is expected for the target
-    // program, but fatal for the reference status we copy from.
-    if (options.required === true) throw error;
-    if (tool !== "CreateGuiStatus" && tool !== "CreateGuiStatusLow") throw error;
-    return emptyCua();
-  }
+  const document = await tryFetchCua(bridge, program);
+  if (document !== undefined) return document;
+  if (tool === "CreateGuiStatus" || tool === "CreateGuiStatusLow") return emptyCua();
+  throw new GatewayError("UPSTREAM_FAILED", `${tool}: ${program} has no GUI status (CUA).`, {
+    ...(options.required === true
+      ? { nextAction: `check that ${program} is a program with a GUI status and is readable in this system` }
+      : { nextAction: "use CreateGuiStatus to create the first status; ReadGuiStatus reports an empty CUA as count 0" }),
+  });
 }
+
+/** Whether a fetched document actually carries CUA rows (as opposed to `ADM` only). */
+const hasCuaRows = (document: CuaDocument): boolean =>
+  CUA_TABLES.some((table) => asRows(document[table]).length > 0);
 
 const writeCua = (bridge: RfcBridge, program: string, document: CuaDocument): Promise<unknown> =>
   bridge.dispatch("CUA_WRITE", { program, cua_data: JSON.stringify(document) });
@@ -120,6 +142,10 @@ const writeCua = (bridge: RfcBridge, program: string, document: CuaDocument): Pr
 export const BRIDGE_TOOL_NAMES: ReadonlySet<string> = new Set([
   "CreateGuiStatus",
   "CreateGuiStatusLow",
+  "UpdateGuiStatus",
+  "UpdateGuiStatusLow",
+  "ReadGuiStatus",
+  "GetGuiStatusList",
   "PatchGuiStatus",
   "DeleteGuiStatus",
   "DeleteGuiStatusLow",
@@ -152,6 +178,54 @@ export const BRIDGE_TOOL_NAMES: ReadonlySet<string> = new Set([
 const REFERENCE_PROGRAM = "SAPLKKBL";
 const REFERENCE_STATUS = "STANDARD_FULLSCREEN";
 
+/**
+ * Narrows a whole reference CUA (which has ~40 statuses) to the one status being
+ * created.
+ *
+ * Keeps one `STA` row, the reference status's `SET` rows renamed to the new code, the
+ * `FUN` rows those functions refer to, and the `PFK`/`BUT` rows of the reference's
+ * function-key code. `TIT` holds 3-character title texts rather than statuses, so it
+ * stays as-is; the description is `STA.INT_NOTE`, not a `TIT` row keyed by the status
+ * name. Returns `undefined` when the reference document has no such status.
+ */
+export function narrowReferenceStatus(
+  referenceDocument: CuaDocument,
+  status: string,
+  description: string | undefined,
+  statusType: unknown,
+): CuaDocument | undefined {
+  const source = asRows(referenceDocument.STA).find(
+    (row) => String(row.CODE ?? "").toUpperCase() === REFERENCE_STATUS,
+  );
+  if (source === undefined) return undefined;
+
+  const refSet = asRows(referenceDocument.SET).filter(
+    (setRow) => String(setRow.STATUS ?? "").toUpperCase() === REFERENCE_STATUS,
+  );
+  const functions = new Set(refSet.map((setRow) => String(setRow.FUNCTION ?? "").trim()));
+  const pfkCode = String(source.PFKCODE ?? "").trim();
+
+  const row: CuaRow = { ...source, CODE: status, MODAL: toStaModal(statusType) };
+  if (description !== undefined) row.INT_NOTE = description.slice(0, 60);
+
+  const document: CuaDocument = { ...referenceDocument, STA: [row] };
+  document.SET = refSet.map((setRow) => ({ ...setRow, STATUS: status }));
+  if (functions.size > 0) {
+    document.FUN = asRows(referenceDocument.FUN).filter((funRow) =>
+      functions.has(String(funRow.CODE ?? "").trim()),
+    );
+  }
+  if (pfkCode.length > 0) {
+    document.PFK = asRows(referenceDocument.PFK).filter(
+      (pfkRow) => String(pfkRow.PFK_CODE ?? "").trim() === pfkCode,
+    );
+    document.BUT = asRows(referenceDocument.BUT).filter(
+      (butRow) => String(butRow.PFK_CODE ?? "").trim() === pfkCode,
+    );
+  }
+  return document;
+}
+
 async function createStatus(args: Args, ctx: ToolContext, runtime: GatewayRuntime, tool: string): Promise<unknown> {
   const program = required(args, "program_name", tool).toUpperCase();
   const status = required(args, "status_name", tool).toUpperCase();
@@ -177,23 +251,23 @@ async function createStatus(args: Args, ctx: ToolContext, runtime: GatewayRuntim
     });
   }
 
-  // A program that already has a CUA keeps its own rows; the reference only fills in.
-  const own = await fetchCua(bridge, program, tool).catch(() => undefined);
-  if (own !== undefined) document = mergeCua(document, own);
-
-  if (asRows(document.STA).some((row) => String(row.CODE ?? "").toUpperCase() === status)) {
-    throw new GatewayError("INVALID_ARGUMENT", `${tool}: GUI status ${status} already exists in ${program}.`, {
-      nextAction: "use UpdateGuiStatus or PatchGuiStatus to change an existing status",
+  // Create builds the *first* status. A program that already has a CUA is changed
+  // with UpdateGuiStatus / PatchGuiStatus; merging the whole reference into it is what
+  // used to leave 40 unrelated SAPLKKBL statuses behind.
+  const own = await tryFetchCua(bridge, program);
+  if (own !== undefined && hasCuaRows(own)) {
+    throw new GatewayError("INVALID_ARGUMENT", `${tool}: ${program} already has a GUI status definition.`, {
+      nextAction: "use UpdateGuiStatus to replace the document or PatchGuiStatus to merge rows",
     });
   }
 
-  // The copy: same functions, own code and own short text.
-  const row: CuaRow = { ...reference, CODE: status, MODAL: toStaModal(args.status_type) };
-  if (description !== undefined) row.INT_NOTE = description.slice(0, 60);
-  document.STA = [...asRows(document.STA), row];
-  if (description !== undefined) {
-    document.TIT = [...asRows(document.TIT), { CODE: status, TEXT: description }];
+  const narrowed = narrowReferenceStatus(document, status, description, args.status_type);
+  if (narrowed === undefined) {
+    throw new GatewayError("UPSTREAM_FAILED", `${tool}: ${REFERENCE_PROGRAM} has no status ${REFERENCE_STATUS}.`, {
+      nextAction: `read ${REFERENCE_PROGRAM} with GetGuiStatus to see which statuses exist`,
+    });
   }
+  document = narrowed;
 
   await writeCua(bridge, program, document);
   return {
@@ -203,7 +277,116 @@ async function createStatus(args: Args, ctx: ToolContext, runtime: GatewayRuntim
     status_name: status,
     created: true,
     copied_from: `${REFERENCE_PROGRAM}/${REFERENCE_STATUS}`,
+    statuses: asRows(document.STA).length,
+    set_rows: asRows(document.SET).length,
     function_codes: asRows(document.FUN).length,
+    activated: true,
+  };
+}
+
+/** Accepts the schema's object or JSON string; unwraps a `{ cua_data: ... }` envelope. */
+function parseCuaDocument(raw: unknown, tool: string): CuaDocument {
+  let value = raw;
+  if (typeof value === "string") {
+    try {
+      value = JSON.parse(value);
+    } catch {
+      throw new GatewayError("INVALID_ARGUMENT", `${tool}: "cua_data" is not valid JSON.`);
+    }
+  }
+  if (value === null || typeof value !== "object" || Array.isArray(value)) {
+    throw new GatewayError("INVALID_ARGUMENT", `${tool}: "cua_data" must be a CUA document object.`);
+  }
+  const record = value as Record<string, unknown>;
+  if (record["cua_data"] !== undefined) return parseCuaDocument(record["cua_data"], tool);
+  if (Array.isArray(record["statuses"])) {
+    throw new GatewayError(
+      "INVALID_ARGUMENT",
+      `${tool}: "cua_data" is the compact statuses view, not a writable CUA document.`,
+      { nextAction: "read the full document with ReadGuiStatus and send that back (ADM / STA / FUN / ...)" },
+    );
+  }
+  return { ...emptyCua(), ...(value as CuaDocument) };
+}
+
+/**
+ * Full-document replace, straight into `CUA_WRITE`.
+ *
+ * The old route ran `CUA_FETCH` first, which both refused the first CUA (sy-subrc=1)
+ * and sent the parsed object to an ABAP `TYPE string` parameter. `CUA_WRITE` is a
+ * replace: no fetch, no merge, and the JSON string is built here once.
+ */
+async function updateStatus(
+  args: Args,
+  ctx: ToolContext,
+  runtime: GatewayRuntime,
+  tool: string,
+): Promise<unknown> {
+  const program = required(args, "program_name", tool).toUpperCase();
+  const raw = args["cua_data"];
+  if (raw === undefined || raw === null) {
+    throw new GatewayError("INVALID_ARGUMENT", `${tool}: missing "cua_data".`);
+  }
+  const document = parseCuaDocument(raw, tool);
+  if (asRows(document.STA).length === 0) {
+    throw new GatewayError("INVALID_ARGUMENT", `${tool}: refusing to write a CUA with no STA rows.`, {
+      nextAction: "use DeleteGuiStatus to remove one status; a full replace must keep at least one status",
+    });
+  }
+
+  const resolved = runtime.resolve(ctx.system, arg(args, "session_id"), true);
+  const bridge = new RfcBridge(resolved.session);
+  await writeCua(bridge, program, document);
+  return {
+    success: true,
+    transport: "rfc",
+    program_name: program,
+    replaced: true,
+    statuses: asRows(document.STA).length,
+    ...(arg(args, "transport_request") === undefined
+      ? {}
+      : { transport_request: arg(args, "transport_request") }),
+    activated: true,
+  };
+}
+
+/** `ReadGuiStatus` (full document) and `GetGuiStatusList` (status list, empty CUA = count 0). */
+async function readCua(
+  args: Args,
+  ctx: ToolContext,
+  runtime: GatewayRuntime,
+  tool: string,
+): Promise<unknown> {
+  const program = required(args, "program_name", tool).toUpperCase();
+  const resolved = runtime.resolve(ctx.system, arg(args, "session_id"), false);
+  const bridge = new RfcBridge(resolved.session);
+  const document = (await tryFetchCua(bridge, program)) ?? emptyCua();
+
+  if (tool === "GetGuiStatusList") {
+    const statuses = asRows(document.STA).map((row) => ({
+      code: String(row.CODE ?? "").trim(),
+      type: String(row.MODAL ?? "").trim(),
+      description: String(row.INT_NOTE ?? "").trim(),
+    }));
+    return {
+      success: true,
+      transport: "rfc",
+      program_name: program,
+      count: statuses.length,
+      statuses,
+      ...(statuses.length === 0 ? { note: "the program has no GUI status (CUA); CreateGuiStatus can create the first one" } : {}),
+      session_id: resolved.sessionId,
+    };
+  }
+
+  return {
+    success: true,
+    transport: "rfc",
+    program_name: program,
+    ...document,
+    count: asRows(document.STA).length,
+    ...(asRows(document.STA).length === 0 ? { note: "the program has no GUI status (CUA)" } : {}),
+    session_id: resolved.sessionId,
   };
 }
 
@@ -756,6 +939,10 @@ export function registerBridgeTools(registry: ToolRegistry, runtime: GatewayRunt
   };
   register("CreateGuiStatus", (args, ctx) => createStatus(args, ctx, runtime, "CreateGuiStatus"));
   register("CreateGuiStatusLow", (args, ctx) => createStatus(args, ctx, runtime, "CreateGuiStatusLow"));
+  register("UpdateGuiStatus", (args, ctx) => updateStatus(args, ctx, runtime, "UpdateGuiStatus"));
+  register("UpdateGuiStatusLow", (args, ctx) => updateStatus(args, ctx, runtime, "UpdateGuiStatusLow"));
+  register("ReadGuiStatus", (args, ctx) => readCua(args, ctx, runtime, "ReadGuiStatus"));
+  register("GetGuiStatusList", (args, ctx) => readCua(args, ctx, runtime, "GetGuiStatusList"));
   register("PatchGuiStatus", (args, ctx) => patchStatus(args, ctx, runtime));
   register("DeleteGuiStatus", (args, ctx) => deleteStatus(args, ctx, runtime));
   register("DeleteGuiStatusLow", (args, ctx) =>

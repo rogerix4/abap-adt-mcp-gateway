@@ -15,7 +15,7 @@
  */
 
 import { AdtError } from "./errors.js";
-import { type AdtSession } from "./session.js";
+import { ADT_BASE, type AdtSession } from "./session.js";
 
 export const ACCEPT_LOCK =
   "application/vnd.sap.as+xml;charset=UTF-8;dataname=com.sap.adt.lock.result;q=0.8, " +
@@ -336,6 +336,8 @@ export interface CheckResult {
   readonly messages: readonly CheckMessage[];
   /** Set when the endpoint said there was nothing to check, which is not a failure. */
   readonly unavailable?: string;
+  /** The version whose messages are returned (after the inactive→active fallback). */
+  readonly version?: "active" | "inactive";
   readonly raw: string;
 }
 
@@ -348,6 +350,13 @@ export interface CheckResult {
  */
 function parseCheckMessages(body: string): CheckMessage[] {
   const messages: CheckMessage[] = [];
+  const decodeXml = (value: string): string =>
+    value
+      .replace(/&quot;/g, '"')
+      .replace(/&apos;/g, "'")
+      .replace(/&lt;/g, "<")
+      .replace(/&gt;/g, ">")
+      .replace(/&amp;/g, "&");
 
   // Two shapes, and only one of them was understood before. Measured 2026-11-04 on a
   // CDS view: SAP answered `<chkrun:checkMessage chkrun:type="E"
@@ -366,7 +375,7 @@ function parseCheckMessages(body: string): CheckMessage[] {
     const line = /chkrun:line="(\d+)"/.exec(attributes)?.[1] ?? /#start=(\d+),/.exec(uri ?? "")?.[1];
     const innerText = /<chkrun:shortText[^>]*>([\s\S]*?)<\/chkrun:shortText>/.exec(inner)?.[1]?.trim();
     const plain = inner.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
-    const text = (attributeText ?? innerText ?? plain).trim();
+    const text = decodeXml((attributeText ?? innerText ?? plain).trim());
     if (text.length === 0) continue;
     messages.push({
       severity,
@@ -382,8 +391,9 @@ function parseCheckMessages(body: string): CheckMessage[] {
     const severity = /chkrun:type="([^"]*)"/.exec(attributes)?.[1] ?? "unknown";
     const uri = /chkrun:uri="([^"]*)"/.exec(attributes)?.[1];
     const line = /chkrun:line="(\d+)"/.exec(attributes)?.[1];
-    const shortText = /<chkrun:shortText[^>]*>([\s\S]*?)<\/chkrun:shortText>/.exec(inner)?.[1]?.trim();
-    const plain = inner.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
+    const rawShortText = /<chkrun:shortText[^>]*>([\s\S]*?)<\/chkrun:shortText>/.exec(inner)?.[1]?.trim();
+    const shortText = rawShortText === undefined ? undefined : decodeXml(rawShortText);
+    const plain = decodeXml(inner.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim());
     const text = shortText ?? plain;
     if (text.length === 0) continue;
     messages.push({
@@ -415,6 +425,7 @@ export async function runCheck(
   uri: string,
   version: "active" | "inactive" = "active",
   retried = false,
+  activeFallbackTried = false,
 ): Promise<CheckResult> {
   const body =
     '<?xml version="1.0" encoding="UTF-8"?>' +
@@ -435,10 +446,24 @@ export async function runCheck(
   } catch (error) {
     const text = error instanceof AdtError ? (error.sapText ?? error.message) : "";
     if (error instanceof AdtError && error.code === "not-found") {
-      return { errors: 0, warnings: 0, messages: [], unavailable: `no ${version} version to check`, raw: "" };
+      return {
+        errors: 0,
+        warnings: 0,
+        messages: [],
+        unavailable: `no ${version} version to check`,
+        version,
+        raw: "",
+      };
     }
     if (/already checked|is not checked/i.test(text)) {
-      return { errors: 0, warnings: 0, messages: [], unavailable: text.slice(0, 200), raw: "" };
+      return {
+        errors: 0,
+        warnings: 0,
+        messages: [],
+        unavailable: text.slice(0, 200),
+        version,
+        raw: "",
+      };
     }
     throw error;
   }
@@ -448,11 +473,68 @@ export async function runCheck(
     session.reset();
     return runCheck(session, uri, version, true);
   }
+
+  // A program that was just activated has no inactive version; `/checkruns` on the
+  // inactive version then answers "The REPORT/PROGRAM statement is missing" — about an
+  // empty version, not about the code. The same message also comes back for a program
+  // whose inactive source demonstrably has a REPORT statement: the source reads back
+  // with `REPORT ...`, while the check still claims it is missing. In both cases the
+  // safe reading is: reset once, then check the active version, which is what the
+  // deliverable actually is.
+  const missingReport = messages.some(
+    (message) =>
+      /^[ea]$/i.test(message.severity) &&
+      /REPORT\/PROGRAM statement is missing|program type is INCLUDE/i.test(message.text),
+  );
+  const hasReportStatement = (source: string): boolean => /\b(REPORT|PROGRAM)\s+[\w/]/i.test(source);
+  const sourcePath = `${uri.startsWith(ADT_BASE) ? uri.slice(ADT_BASE.length) : uri}/source/main`;
+
+  if (version === "inactive" && !activeFallbackTried && missingReport) {
+    const inactive = await readSource(session, sourcePath, "inactive").catch(() => "");
+    const inactiveHasReport = hasReportStatement(inactive);
+    if (inactiveHasReport) {
+      // The check contradicts source we just read: a stale session, or the endpoint is
+      // looking at the wrong version. Reset and retry once before changing versions.
+      if (!retried) {
+        session.reset();
+        return runCheck(session, uri, "inactive", true, activeFallbackTried);
+      }
+      return runCheck(session, uri, "active", retried, true);
+    }
+    if (inactive.trim().length === 0) {
+      const active = await readSource(session, sourcePath, "active").catch(() => "");
+      if (hasReportStatement(active)) {
+        return runCheck(session, uri, "active", retried, true);
+      }
+    }
+  }
+
   const severities = messages.map((message) => message.severity.toLowerCase());
+  const warnings = severities.filter((value) => value === "w" || value === "warning").length;
+
+  // Last resort: the active source has a REPORT statement and the check still says it
+  // is missing. That is a false negative from the check endpoint, not a compile error;
+  // report it as `unavailable` (callers must not turn it green as "checked").
+  if (version === "active" && missingReport) {
+    const active = await readSource(session, sourcePath, "active").catch(() => "");
+    if (hasReportStatement(active)) {
+      return {
+        errors: 0,
+        warnings,
+        messages: [],
+        unavailable:
+          "the check endpoint reported REPORT/PROGRAM missing although the active source has one; it cannot judge this object",
+        version,
+        raw: response.body.length > 4000 ? `${response.body.slice(0, 4000)}…` : response.body,
+      };
+    }
+  }
+
   return {
     errors: severities.filter((value) => value === "e" || value === "error").length,
-    warnings: severities.filter((value) => value === "w" || value === "warning").length,
+    warnings,
     messages,
+    version,
     raw: response.body.length > 4000 ? `${response.body.slice(0, 4000)}…` : response.body,
   };
 }

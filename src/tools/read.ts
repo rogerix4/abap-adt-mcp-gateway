@@ -10,7 +10,7 @@ import type { ToolRegistry } from "../engine/registry.js";
 import type { GatewayRuntime } from "../runtime.js";
 import { GatewayError } from "../engine/errors.js";
 import { parseDataPreview } from "../adt/datapreview.js";
-import { RfcBridge } from "../adt/rfc.js";
+import { isCuaMissingError, RfcBridge } from "../adt/rfc.js";
 import type { AdtSession } from "../adt/session.js";
 import { registerProfilerTools } from "./profiler.js";
 
@@ -278,33 +278,75 @@ function parseUsageReference(attributes: string, inner: string): UsageReference 
   };
 }
 
+/** The Data Preview endpoint wraps the text as `SELECT ... INTO TABLE ... UP TO n ROWS`. */
+export function precheckSqlQuery(sql: string): string {
+  const trimmed = sql.trim();
+  if (!/^SELECT\b/i.test(trimmed)) {
+    throw new GatewayError(
+      "INVALID_ARGUMENT",
+      'GetSqlQuery only runs SELECT statements; the Data Preview endpoint wraps the text in "SELECT ... INTO TABLE".',
+      { nextAction: "start the statement with SELECT; express a CTE as a subquery" },
+    );
+  }
+  if (trimmed.includes(";")) {
+    throw new GatewayError("INVALID_ARGUMENT", "GetSqlQuery accepts one statement; remove the semicolon.", {
+      nextAction: "send one SELECT without a trailing semicolon",
+    });
+  }
+  return trimmed;
+}
+
 export function registerReadTools(registry: ToolRegistry, runtime: GatewayRuntime): void {
   if (registry.has("GetSqlQuery")) {
     registry.register("GetSqlQuery", async (args, ctx) => {
-      const sql = str(args, "sql_query");
-      if (sql === undefined) throw new GatewayError("INVALID_ARGUMENT", 'Missing "sql_query".');
+      const rawSql = str(args, "sql_query");
+      if (rawSql === undefined) throw new GatewayError("INVALID_ARGUMENT", 'Missing "sql_query".');
+      const sql = precheckSqlQuery(rawSql);
       const resolved = runtime.resolve(ctx.system, undefined, false);
-      const rowNumber = num(args, "row_number", 100);
+      // Clamp: a preview is a preview. Very large row numbers also keep the temporary
+      // subroutine pool busy on some releases, which answered "temporary subroutine
+      // pools exhausted" after a run of preview calls.
+      const rowNumber = Math.max(1, Math.min(Math.trunc(num(args, "row_number", 100)), 5000));
 
-      // The endpoint wraps the statement as
-      // `SELECT ... INTO TABLE ... UP TO n ROWS`, so the body must be a bare SELECT.
-      const response = await resolved.session.request({
-        method: "POST",
-        path: `/datapreview/freestyle?rowNumber=${rowNumber}`,
-        accept: "application/vnd.sap.adt.datapreview.table.v1+xml",
-        contentType: "text/plain",
-        body: sql,
-        timeoutMs: 120_000,
-      });
+      let response: Awaited<ReturnType<AdtSession["request"]>>;
+      try {
+        response = await resolved.session.request({
+          method: "POST",
+          // Ask for one row more than the caller wants, so `truncated` means "there is
+          // more" rather than "the answer happened to fill the page exactly".
+          path: `/datapreview/freestyle?rowNumber=${rowNumber + 1}`,
+          accept: "application/vnd.sap.adt.datapreview.table.v1+xml",
+          contentType: "text/plain",
+          body: sql,
+          timeoutMs: 120_000,
+        });
+      } catch (error) {
+        const message = String((error as Error).message ?? error);
+        if (/temporary (subroutine )?pool|TSV_TNEW|no more storage|out of memory|resource/i.test(message)) {
+          throw new GatewayError("UPSTREAM_FAILED", `GetSqlQuery: ${message}`, {
+            nextAction:
+              "the system ran out of temporary program space; wait for the pool to clear, reduce row_number, or use GetTableContentsLow for a direct table read",
+          });
+        }
+        if (/syntax error|unexpected|not supported|invalid|grammar|unknown/i.test(message)) {
+          throw new GatewayError("INVALID_ARGUMENT", `GetSqlQuery: SAP rejected the statement: ${message}`, {
+            nextAction:
+              "use a plain SELECT with explicit columns; Data Preview rejects DESC, <> and NOT = — use ORDER BY ... DESCENDING, NE and NOT ( ... )",
+          });
+        }
+        throw error;
+      }
 
       const preview = parseDataPreview(response.body);
+      const truncated = preview.rows.length > rowNumber;
+      const rows = truncated ? preview.rows.slice(0, rowNumber) : preview.rows;
       return {
         success: true,
-        row_count: preview.rows.length,
+        row_count: rows.length,
         row_limit: rowNumber,
-        truncated: preview.rows.length >= rowNumber,
+        truncated,
         columns: preview.columns,
-        rows: preview.rows,
+        rows,
         ...(preview.executedQuery === undefined ? {} : { executed_query: preview.executedQuery }),
         session_id: resolved.sessionId,
       };
@@ -1250,9 +1292,48 @@ export function registerReadTools(registry: ToolRegistry, runtime: GatewayRuntim
 
       const resolved = runtime.resolve(ctx.system, undefined, false);
       // CUA has no ADT resource: the dispatcher bridge returns the whole RSMPE image.
-      const raw = await new RfcBridge(resolved.session).dispatch("CUA_FETCH", { program });
-      if (raw.subrc !== 0) {
-        throw new GatewayError("UPSTREAM_FAILED", `CUA_FETCH subrc=${raw.subrc} ${raw.message ?? ""}`);
+      // A program without a GUI status answers sy-subrc=1; that is an empty CUA, not a
+      // failed read — report count 0 / empty tables instead of UPSTREAM_FAILED.
+      let raw: Awaited<ReturnType<RfcBridge["dispatch"]>>;
+      try {
+        raw = await new RfcBridge(resolved.session).dispatch("CUA_FETCH", { program });
+      } catch (error) {
+        if (!isCuaMissingError(error)) throw error;
+        const empty = {
+          ADM: {},
+          STA: [],
+          SET: [],
+          FUN: [],
+          PFK: [],
+          BUT: [],
+          MEN: [],
+          MTX: [],
+          ACT: [],
+          DOC: [],
+          TIT: [],
+          BIV: [],
+        };
+        if (compact) {
+          return {
+            success: true,
+            transport: "rfc",
+            program_name: program,
+            format: "compact",
+            count: 0,
+            statuses: [],
+            note: "the program has no GUI status (CUA); CreateGuiStatus can create the first one",
+            session_id: resolved.sessionId,
+          };
+        }
+        return {
+          success: true,
+          transport: "rfc",
+          program_name: program,
+          result: empty,
+          count: 0,
+          note: "the program has no GUI status (CUA); CreateGuiStatus can create the first one",
+          session_id: resolved.sessionId,
+        };
       }
       const result = (raw.result ?? {}) as Record<string, unknown>;
       const rows = (key: string): Array<Record<string, string>> =>

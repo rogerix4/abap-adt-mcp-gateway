@@ -45,6 +45,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   facade.
 - **Write-concurrency tests for several systems** in `tests/contract.test.ts`: writes to
   different systems overlap, and two writes to the same system are serialised.
+- **Regression tests for GUI status creation and SQL preview**: `tests/cua.test.ts` pins
+  the single-status reference copy, `tests/sql-query.test.ts` pins the `SELECT` precheck,
+  and `tests/check-retry.test.ts` covers the inactive-to-active check fallback.
+
+### Fixed
+
+- **GUI status lifecycle is consistent for programs without a CUA.** `GetGuiStatus`,
+  `GetGuiStatusList` and `ReadGuiStatus` treat `RS_CUA_INTERNAL_FETCH` subrc 1 as an
+  empty status set (`count: 0`) instead of an upstream failure. `CreateGuiStatus` copies
+  exactly one status from the reference CUA, including only the `SET`, `FUN`, `PFK` and
+  `BUT` rows that status refers to, and refuses a program that already owns a CUA.
+- **`UpdateGuiStatus` and `UpdateGuiStatusLow` perform a true full-document replace.**
+  They no longer pre-fetch the target CUA, so the first status can be created; `cua_data`
+  accepts either a structured object or a JSON string, and an empty `STA` is rejected
+  instead of silently wiping the definition.
+- **CUA writes carry the mandatory `TRKEY`** to `RS_CUA_INTERNAL_WRITE`, so the status is
+  recorded in the program's transport task.
+- **The ABAP check no longer reports a missing `REPORT`/`PROGRAM` statement for a program
+  that has one.** When the inactive check answers that message but the inactive source
+  carries the statement, the gateway resets the session once and falls back to the active
+  version; the same contradiction on an active check is reported as `unavailable` rather
+  than a compile error. Check message texts are XML-decoded.
+- **`Validate*Low` states that it checks name availability**: it returns `exists`,
+  `validation_kind: "name_availability"` and points callers to `Check*` for syntax
+  validation of an existing object.
+- **`GetSqlQuery` validates the statement before calling Data Preview**: it accepts one
+  `SELECT`, caps `row_number` at 5000, requests one extra row so `truncated` reflects
+  whether more rows exist, and maps syntax or temporary-pool failures to
+  `INVALID_ARGUMENT` / `UPSTREAM_FAILED` with actionable guidance.
 
 ### Deprecated
 

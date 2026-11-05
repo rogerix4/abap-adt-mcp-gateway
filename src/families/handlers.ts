@@ -366,6 +366,7 @@ async function dispatch(
         errors: result.errors,
         warnings: result.warnings,
         messages: result.messages,
+        ...(result.version === undefined ? {} : { checked_version: result.version }),
         ...(result.unavailable === undefined ? {} : { unavailable: result.unavailable }),
         session_id: resolved.sessionId,
       };
@@ -388,8 +389,16 @@ async function dispatch(
       return {
         success: !exists,
         name,
+        exists,
         available: !exists,
-        ...(exists ? { detail: "an object with this name already exists" } : {}),
+        validation_kind: "name_availability",
+        ...(exists
+          ? {
+              detail: "an object with this name already exists",
+              next_action:
+                "Validate* answers whether the name is free for Create; to check the existing object use Check* (CheckProgramLow / CheckClassLow / CheckCdsViewLow / ...)",
+            }
+          : {}),
         ...(packageName === undefined ? { detail_package: "package_name is required to create this object" } : {}),
         session_id: resolved.sessionId,
       };
