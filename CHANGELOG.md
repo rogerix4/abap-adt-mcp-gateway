@@ -49,6 +49,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the single-status reference copy, `tests/sql-query.test.ts` pins the `SELECT` precheck
   and the SQL failure classification, `tests/smartforms.test.ts` pins the create guard,
   and `tests/check-retry.test.ts` covers the inactive-to-active check fallback.
+- **Service-binding regression coverage**: `tests/families.test.ts` verifies the 415 to
+  v1 media-type retry during creation, and `tests/adt.test.ts` verifies that deletion is
+  read back before success is reported.
 
 ### Fixed
 
@@ -75,6 +78,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `SELECT`, caps `row_number` at 5000, requests one extra row so `truncated` reflects
   whether more rows exist, and maps syntax or temporary-pool failures to
   `INVALID_ARGUMENT` / `UPSTREAM_FAILED` with actionable guidance.
+- **Service binding creation negotiates the media type required by release 754.**
+  `POST /businessservices/bindings` rejects the v2 media type with 415 on that release
+  even though GET returns v2. Creation now retries with the v1 media type and the archived
+  client's XML shape; newer releases continue to use the v2 request first.
+- **Service binding deletion verifies the object is gone before reporting success.**
+  If the generic DELETE returns 412, the gateway releases the lock, calls the deletion
+  resource, and reads the binding back. A request that SAP accepts but does not execute is
+  reported as `412` with the reason, not as `success: true`.
 - **`CreateSmartForm` no longer reports a stored-but-ungenerated form as success.** When
   activation returns an active form without a generated function module, the tool answers
   `UPSTREAM_FAILED` with the form interface check as the next action, instead of leaving

@@ -604,14 +604,73 @@ export async function deleteObject(
     detail = error.message;
   }
 
+  // Release 754 answers the generic DELETE of a service binding with 412
+  // "no authorization to change"; its own deletion resource still accepts the
+  // request (the archived client used it). The resource is not usable for every
+  // object type on 754, so this is scoped to the service-binding path.
+  let lockReleased = false;
+  let lockError: string | undefined;
+  if (!deleted && status === 412 && relUri.includes("/businessservices/bindings/")) {
+    // The deletion resource refuses an object that is still enqueued to us.
+    const early = await unlockObject(session, relUri, lock.lockHandle);
+    lockReleased = early.released;
+    lockError = early.error;
+    const bindingUri = relUri.startsWith("/sap/bc/adt") ? relUri : `/sap/bc/adt${relUri}`;
+    const deletionBody =
+      '<?xml version="1.0" encoding="UTF-8"?>' +
+      '<del:deletionRequest xmlns:del="http://www.sap.com/adt/deletion" ' +
+      'xmlns:adtcore="http://www.sap.com/adt/core">' +
+      `<del:object adtcore:uri="${bindingUri}">` +
+      `<del:transportNumber>${transport ?? ""}</del:transportNumber>` +
+      "</del:object></del:deletionRequest>";
+    try {
+      const response = await session.request({
+        method: "POST",
+        path: "/deletion/delete",
+        accept: "application/vnd.sap.adt.deletion.response.v1+xml",
+        contentType: "application/vnd.sap.adt.deletion.request.v1+xml",
+        body: deletionBody,
+      });
+      deleted = response.status >= 200 && response.status < 300;
+      status = response.status;
+      if (deleted) {
+        // The resource answers 200 for a deletion proposal as well; only a read
+        // back proves the object is gone. A false success is worse than a
+        // failure the caller can act on.
+        const stillThere = await session
+          .request({ path: relUri, accept: "*/*" })
+          .then(() => true)
+          .catch((error: unknown) => !(error instanceof AdtError && error.status === 404));
+        if (stillThere) {
+          deleted = false;
+          status = 412;
+          detail = "The deletion request was accepted but the object is still readable.";
+        } else {
+          detail = undefined;
+        }
+      }
+    } catch (error) {
+      if (error instanceof AdtError) {
+        status = error.status ?? status;
+        detail = error.message;
+      } else {
+        throw error;
+      }
+    }
+  }
+
   // Always release: a failed delete kept the lock because nothing was deleted, a
   // successful one because SAP does not dequeue the name for us.
-  const unlock = await unlockObject(session, relUri, lock.lockHandle);
+  if (!lockReleased) {
+    const unlock = await unlockObject(session, relUri, lock.lockHandle);
+    lockReleased = unlock.released;
+    lockError = unlock.error;
+  }
   return {
     deleted,
     status,
     ...(detail === undefined ? {} : { detail }),
-    lock_released: unlock.released,
-    ...(unlock.error === undefined ? {} : { lock_error: unlock.error }),
+    lock_released: lockReleased,
+    ...(lockError === undefined ? {} : { lock_error: lockError }),
   };
 }

@@ -230,6 +230,28 @@ describe("lifecycle", () => {
     expect(calls[2]?.method).toBe("DELETE");
     expect(calls[2]?.url).toContain("lockHandle=H9");
   });
+
+  it("falls back to the deletion resource when a service binding refuses the generic DELETE", async () => {
+    // Release 754 answers DELETE /businessservices/bindings/<name> with 412
+    // "no authorization to change", but accepts the deletion request.
+    const { adt, calls } = session([
+      CSRF,
+      { status: 200, body: "<DATA><LOCK_HANDLE>H9</LOCK_HANDLE></DATA>" },
+      { status: 412, body: "<message>无权限 更改</message>" },
+      { status: 200, body: "" }, // early unlock before the deletion request
+      { status: 200, body: "" }, // deletion request
+      { status: 404, body: "<message>not found</message>" }, // read back: gone
+    ]);
+    const result = await deleteObject(adt, "/businessservices/bindings/zsvc", "S4HK900001");
+
+    expect(result.deleted).toBe(true);
+    expect(result.status).toBe(200);
+    const deletion = calls.find((call) => call.method === "POST" && call.url.endsWith("/deletion/delete"));
+    expect(deletion).toBeDefined();
+    expect(deletion?.body).toContain("/sap/bc/adt/businessservices/bindings/zsvc");
+    expect(deletion?.body).toContain("S4HK900001");
+    expect(deletion?.headers["content-type"]).toBe("application/vnd.sap.adt.deletion.request.v1+xml");
+  });
 });
 
 describe("source comparison", () => {

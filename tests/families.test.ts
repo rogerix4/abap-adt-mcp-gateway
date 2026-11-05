@@ -413,6 +413,43 @@ describe("read-modify-write updates", () => {
   });
 });
 
+describe("service binding create media negotiation", () => {
+  it("retries the POST with Accept: */* when the release rejects the advertised type", async () => {
+    // Measured on release 754: POST /businessservices/bindings answers 415 for
+    // the v2 media type, although GET of an existing binding returns v2.
+    const { impl, calls } = scriptedFetch([
+      CSRF,
+      { status: 415, body: "<message>Unsupported Media Type</message>" },
+      { status: 415, body: "<message>Unsupported Media Type</message>" }, // Accept: */* retry, still v2
+      { status: 201, body: "" }, // POST create, retried with the v1+v2 Accept list
+      { status: 200, body: "" }, // activation
+    ]);
+    const { registry } = build(impl);
+
+    const created = (await registry.call(
+      "CreateServiceBinding",
+      {
+        service_binding_name: "ZSVC_PROBE",
+        service_definition_name: "ZSVC_SRVD_PROBE",
+        package_name: "$TMP",
+        binding_type: "ODataV2",
+      },
+      { system: "probe" },
+    )) as { success: boolean };
+
+    expect(created.success).toBe(true);
+    const posts = calls.filter((call) => call.method === "POST" && call.url.endsWith("/businessservices/bindings"));
+    expect(posts).toHaveLength(3);
+    expect(posts[0]?.headers.accept).toBe("application/vnd.sap.adt.businessservices.servicebinding.v2+xml");
+    expect(posts[1]?.headers.accept).toBe("*/*");
+    expect(posts[1]?.headers["content-type"]).toBe("application/vnd.sap.adt.businessservices.servicebinding.v2+xml");
+    expect(posts[2]?.headers.accept).toBe("*/*");
+    expect(posts[2]?.headers["content-type"]).toBe(
+      "application/vnd.sap.adt.businessservices.servicebinding.v1+xml",
+    );
+  });
+});
+
 describe("parent/child families", () => {
   it("addresses a function module through its group and places it by containerRef", async () => {
     const { impl, calls } = scriptedFetch([

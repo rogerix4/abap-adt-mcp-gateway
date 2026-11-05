@@ -1063,9 +1063,11 @@ function behaviourMainSource(className: string, behaviour: string): string {
 
 /** Service binding (SRVB): a document plus publish/unpublish jobs. */
 export function serviceBindingFamily(): ObjectFamily {
-  // Measured 2026-11-04: v1 is rejected ("Unsupported Media Type"); v2 is accepted,
-  // and the document's namespace is `http://www.sap.com/adt/ddic/ServiceBindings`
-  // (read from an existing standard binding, not guessed).
+  // Newer releases accept POST with the v2 media type. Release 754 answers GET
+  // with v2 but rejects the POST with 415; its POST accepts v1, and that is
+  // exactly the schema the archived client sent. Keep the v2 media for reads
+  // and try it first for writes.
+  const v1 = "application/vnd.sap.adt.businessservices.servicebinding.v1+xml";
   const media = "application/vnd.sap.adt.businessservices.servicebinding.v2+xml";
 
   return {
@@ -1078,33 +1080,32 @@ export function serviceBindingFamily(): ObjectFamily {
     objectPath: (name) => `/businessservices/bindings/${lower(name)}`,
     collectionPath: "/businessservices/bindings",
     media: { accept: media, contentType: media },
-    // Measured shape: `srvb:services` (one `srvb:content` with the service definition
-    // reference) and `srvb:binding` (type + implementation) are **siblings** — nesting
-    // the binding inside `bindingTypeData` answers "the system expected the end of element
-    // '{...}bindingTypeData'".
+    createMediaFallbacks: [{ accept: "*/*", contentType: v1 }],
+    // Shape taken from the archived client: `srvb:services/srvb:content` carries
+    // one `srvb:serviceDefinition` by name, and `srvb:binding` is a sibling.
+    // Measured 2026-11-04: the v2-only shape (extra content attributes plus
+    // `srvb:bindingTypeData`) makes release 754 answer "expected end of element
+    // '{...}content'".
     createBody: (context) => {
       const serviceDefinition = String(context.args["service_definition_name"] ?? context.name);
+      const serviceName = String(context.args["service_name"] ?? context.name);
       const version = String(context.args["binding_type"] ?? "").toUpperCase() === "ODATAV2" ? "V2" : "V4";
       const contentVersion = String(context.args["service_version"] ?? "0001");
       return (
         '<?xml version="1.0" encoding="UTF-8"?>' +
         '<srvb:serviceBinding xmlns:srvb="http://www.sap.com/adt/ddic/ServiceBindings" ' +
         'xmlns:adtcore="http://www.sap.com/adt/core" ' +
-        `adtcore:name="${escapeXml(context.name)}" adtcore:type="SRVB/SVB" ` +
         `adtcore:description="${escapeXml(context.description.slice(0, 60))}" ` +
-        `adtcore:language="${escapeXml(context.language)}" adtcore:masterLanguage="${escapeXml(context.language)}" ` +
-        'srvb:contract="C1" srvb:releaseSupported="true" srvb:published="false" ' +
-        'srvb:bindingCreated="true" srvb:allowedAction="PUBLISH">' +
+        `adtcore:language="${escapeXml(context.language)}" adtcore:name="${escapeXml(context.name)}" ` +
+        'adtcore:type="SRVB/SVB" ' +
+        `adtcore:masterLanguage="${escapeXml(context.language)}">` +
         `<adtcore:packageRef adtcore:name="${escapeXml(context.packageName)}"/>` +
-        `<srvb:services srvb:name="${escapeXml(context.name)}">` +
-        `<srvb:content srvb:version="${escapeXml(contentVersion)}" srvb:minorVersion="0" srvb:patchVersion="0" ` +
-        'srvb:buildVersion="" srvb:releaseState="NOT_RELEASED">' +
-        `<srvb:serviceDefinition adtcore:uri="/sap/bc/adt/ddic/srvd/sources/${lower(serviceDefinition)}" ` +
-        `adtcore:type="SRVD/SRV" adtcore:name="${escapeXml(serviceDefinition)}"/>` +
-        '<srvb:bindingTypeData><adtcore:content adtcore:encoding="base64"/></srvb:bindingTypeData>' +
+        `<srvb:services srvb:name="${escapeXml(serviceName)}">` +
+        `<srvb:content srvb:version="${escapeXml(contentVersion)}">` +
+        `<srvb:serviceDefinition adtcore:name="${escapeXml(serviceDefinition)}"/>` +
         "</srvb:content></srvb:services>" +
-        `<srvb:binding srvb:type="ODATA" srvb:version="${version}" srvb:category="0">` +
-        `<srvb:implementation adtcore:name="${escapeXml(context.name)}"/>` +
+        `<srvb:binding srvb:category="1" srvb:type="ODATA" srvb:version="${version}">` +
+        '<srvb:implementation adtcore:name=""/>' +
         "</srvb:binding></srvb:serviceBinding>"
       );
     },

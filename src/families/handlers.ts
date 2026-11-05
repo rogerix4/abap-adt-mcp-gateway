@@ -456,14 +456,30 @@ async function create(context: DispatchContext, low: boolean, name: string): Pro
   /** What the family's hooks measured, merged into the result below. */
   let extra: Readonly<Record<string, unknown>> = {};
 
-  await resolved.session.request({
-    method: "POST",
-    path: `${collectionOf(family, create.parent)}${transportSuffix(args)}`,
-    accept: family.media.accept,
-    contentType: family.media.contentType,
-    body,
-    timeoutMs: 120_000,
-  });
+  // Service binding creation on release 754 answers 415 to the v2 media type
+  // even though GET returns v2. `Accept: */*` alone does not help there; the
+  // same body has to be sent as v1. A 415 means SAP did not process the request,
+  // so trying the next media pair is safe.
+  const createMedia = [family.media, ...(family.createMediaFallbacks ?? [])];
+  let lastMediaError: unknown;
+  for (const media of createMedia) {
+    try {
+      await resolved.session.requestAcceptingAny({
+        method: "POST",
+        path: `${collectionOf(family, create.parent)}${transportSuffix(args)}`,
+        accept: media.accept,
+        contentType: media.contentType,
+        body,
+        timeoutMs: 120_000,
+      });
+      lastMediaError = undefined;
+      break;
+    } catch (error) {
+      if (!(error instanceof AdtError && error.code === "content-negotiation")) throw error;
+      lastMediaError = error;
+    }
+  }
+  if (lastMediaError !== undefined) throw lastMediaError;
 
   if (family.afterCreate !== undefined) {
     extra = { ...extra, ...((await family.afterCreate(resolved.session, create, objectPath)) ?? {}) };

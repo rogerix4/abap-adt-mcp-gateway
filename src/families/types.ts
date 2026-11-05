@@ -107,6 +107,14 @@ export interface ObjectFamily {
   readonly sourcePath?: (objectPath: string) => string;
   /** Media types for reading and creating the object. */
   readonly media: { readonly accept: string; readonly contentType: string };
+  /**
+   * Extra create media pairs for releases that reject the current one.
+   *
+   * Measured on release 754: service-binding GET answers v2, but POST rejects
+   * v2 with 415; the same body is accepted as v1. SAP did not process a 415, so
+   * retrying the POST with a different media pair is safe.
+   */
+  readonly createMediaFallbacks?: readonly { readonly accept: string; readonly contentType: string }[];
   /** Builds the create request body. Absent for families created some other way. */
   readonly createBody?: (context: CreateContext) => string;
   /** Envelope form, used when the body is the generic `createBody` shape. */
