@@ -392,13 +392,13 @@ which selects the SAP system (see [USAGE.md](./USAGE.md#which-system-a-call-goes
 
 | Tool | What it does |
 |---|---|
-| `UpdateBehaviorDefinition` | Update source code of an ABAP Behavior Definition (BDEF). Modifies RAP business object behavior: CRUD operations, validations, determinations, actions, and draft handling. |
+| `UpdateBehaviorDefinition` | Update source code of an ABAP Behavior Definition (BDEF). Modifies RAP business object behavior: CRUD operations, validations, determinations, actions, and draft handling. Alter… |
 | `UpdateBehaviorDefinitionLow` | [low-level] Update source code of an existing ABAP behavior definition. Requires lock handle from LockObject. - use UpdateBehaviorDefinition (high-level) for full workflow with … |
 | `UpdateBehaviorImplementation` | Update source code of an existing ABAP behavior implementation class. Updates both main source (with FOR BEHAVIOR OF clause) and implementations include. Uses stateful session w… |
 | `UpdateCdsUnitTest` | Update a CDS unit test class local test class source code. |
 | `UpdateCdsView` | Update DDL source code of an existing CDS View or Classic View. Locks the view, checks new code, uploads new DDL source, unlocks, and optionally activates. |
 | `UpdateCdsViewLow` | [low-level] Update DDL source code of an existing CDS View or Classic View. Requires lock handle from LockObject. - use UpdateCdsView (high-level) for full workflow with lock/un… |
-| `UpdateClass` | Update source code of an existing ABAP class. Locks, checks, updates, unlocks, and optionally activates. |
+| `UpdateClass` | Update source code of an existing ABAP class. Locks, checks, updates, unlocks, and optionally activates. Alternatively pass source_file (local path, read server-side) or patch (… |
 | `UpdateClassLow` | [low-level] Update source code of an existing ABAP class. Uses session from HandlerContext. Requires lock handle from LockClass operation. - use UpdateClass (high-level) for ful… |
 | `UpdateClassTestClassesLow` | [low-level] Upload ABAP Unit test include source code for an existing class. Requires test_classes_lock_handle from LockClassTestClassesLow. |
 | `UpdateDataElement` | Update an existing ABAP data element in SAP system. Workflow: 1. Gets domain info (if type_kind is 'domain') to extract dataType/length/decimals 2. Acquires lock on the data ele… |
@@ -411,21 +411,21 @@ which selects the SAP system (see [USAGE.md](./USAGE.md#which-system-a-call-goes
 | `UpdateGuiStatus` | ⚠️ FULL REPLACE — overwrites the entire GUI Status definition (all 12 CUA tables) for the program. Any row or field you omit is DROPPED. Always Read (ReadGuiStatus) → modify → U… |
 | `UpdateGuiStatusLow` | [low-level] Update an ABAP GUI Status definition. Provide full CUA data (from ReadGuiStatus) with modifications. |
 | `UpdateInclude` | Update source code of an existing ABAP Include program (Type I). Locks the include, uploads new source code, and unlocks. Optionally activates after update. Use this instead of … |
-| `UpdateInterface` | Update source code of an existing ABAP interface. Uses stateful session with proper lock/unlock mechanism. Lock handle and transport number are passed in URL parameters. |
-| `UpdateInterfaceLow` | [low-level] Update source code of an existing ABAP interface. Requires lock handle from LockObject. - use UpdateInterface (high-level) for full workflow with lock/unlock/activate. |
+| `UpdateInterface` | Update source code of an existing ABAP interface. Uses stateful session with proper lock/unlock mechanism. Lock handle and transport number are passed in URL parameters. Alterna… |
+| `UpdateInterfaceLow` | [low-level] Update source code of an existing ABAP interface. Requires lock handle from LockObject. - use UpdateInterface (high-level) for full workflow with lock/unlock/activat… |
 | `UpdateLocalDefinitions` | Update local definitions in an ABAP class (definitions include). Manages lock, check, update, unlock, and optional activation. |
 | `UpdateLocalMacros` | Update local macros in an ABAP class (macros include). Manages lock, check, update, unlock, and optional activation. Note: Macros are supported in older ABAP versions but not in… |
 | `UpdateLocalTestClass` | Update a local test class in an ABAP class. Manages lock, check, update, unlock, and optional activation of parent class. |
 | `UpdateLocalTypes` | Update local types in an ABAP class (implementations include). Manages lock, check, update, unlock, and optional activation. |
-| `UpdateMetadataExtension` | Update source code of an ABAP Metadata Extension (DDLX). Modifies Fiori UI annotations, field labels, search help, and list/object page layout for CDS views. |
+| `UpdateMetadataExtension` | Update source code of an ABAP Metadata Extension (DDLX). Modifies Fiori UI annotations, field labels, search help, and list/object page layout for CDS views. Alternatively pass … |
 | `UpdateMetadataExtensionLow` | [low-level] Update source code of an existing ABAP metadata extension. Requires lock handle from LockObject. - use UpdateMetadataExtension (high-level) for full workflow with lo… |
 | `UpdatePackageLow` | [low-level] Update description of an existing ABAP package. Requires lock handle from LockObject and superPackage. - use UpdatePackageSource for full workflow with lock/unlock. |
 | `UpdateProgram` | Update source code of an existing ABAP program. Locks the program, checks new code, uploads new source code, and unlocks. Optionally activates after update. Use this to modify e… |
-| `UpdateProgramLow` | [low-level] Update source code of an existing ABAP program. Requires lock handle from LockObject. - use UpdateProgram (high-level) for full workflow with lock/unlock/activate. |
+| `UpdateProgramLow` | [low-level] Update source code of an existing ABAP program. Requires lock handle from LockObject. - use UpdateProgram (high-level) for full workflow with lock/unlock/activate. A… |
 | `UpdateScreen` | Update an ABAP Screen (Dynpro) definition. Provide full screen data as JSON. Handles lock/unlock automatically. |
 | `UpdateScreenLow` | [low-level] Update an ABAP Screen (Dynpro) definition. Provide full screen data as JSON. |
 | `UpdateServiceBinding` | Update publication state for ABAP service binding via AdtServiceBinding workflow. |
-| `UpdateServiceDefinition` | Update source code of an existing ABAP service definition. Uses stateful session with proper lock/unlock mechanism. |
+| `UpdateServiceDefinition` | Update source code of an existing ABAP service definition. Uses stateful session with proper lock/unlock mechanism. Alternatively pass source_file (local path, read server-side)… |
 | `UpdateStructure` | Update DDL source code of an existing ABAP structure. Locks the structure, uploads new DDL source, and unlocks. Optionally activates after update. Use this to modify existing st… |
 | `UpdateStructureLow` | [low-level] Update DDL source code of an existing ABAP structure. Requires lock handle from LockObject. - use UpdateStructureSource for full workflow with lock/unlock. |
 | `UpdateTable` | Update DDL source code of an existing ABAP table. Locks the table, uploads new DDL source, and unlocks. Optionally activates after update. Use this to modify existing tables wit… |

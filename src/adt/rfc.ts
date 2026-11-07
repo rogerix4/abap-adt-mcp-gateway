@@ -15,6 +15,7 @@
 
 import type { AdtSession } from "./session.js";
 import { GatewayError } from "../engine/errors.js";
+import { decodeXmlEntities, findElements, nodeTextOf, parseXml } from "./xml.js";
 
 const SOAP_PATH = "/sap/bc/soap/rfc";
 const SOAP_NS = "http://schemas.xmlsoap.org/soap/envelope/";
@@ -40,15 +41,6 @@ const escapeXml = (value: string): string =>
     .replace(/"/g, "&quot;")
     .replace(/'/g, "&apos;");
 
-const unescapeXml = (value: string): string =>
-  value
-    .replace(/&lt;/g, "<")
-    .replace(/&gt;/g, ">")
-    .replace(/&quot;/g, '"')
-    .replace(/&apos;/g, "'")
-    .replace(/&#(\d+);/g, (_match, code: string) => String.fromCodePoint(Number(code)))
-    .replace(/&amp;/g, "&");
-
 /** SOAP envelope for one function-module call; parameters are flat strings. */
 export function buildSoapEnvelope(fmName: string, params: Readonly<Record<string, string>>): string {
   const fields = Object.entries(params)
@@ -68,21 +60,42 @@ export function buildSoapEnvelope(fmName: string, params: Readonly<Record<string
 /**
  * Reads the flat `EV_*` export parameters out of a SOAP response.
  *
- * Deliberately not a general XML parser: SAP answers this call with one shallow
- * `FM.Response` element whose children are single values.
+ * The answer is one shallow `FM.Response` whose children are single values, so the walk
+ * simply collects every element whose name looks like an ABAP parameter. This used to be
+ * a `<TAG>value</TAG>` regex, which cannot nest and would have dropped a value containing
+ * the same tag name.
  */
 export function parseSoapResult(xml: string, fmName: string): Record<string, string> {
-  const fault = /<faultstring[^>]*>([\s\S]*?)<\/faultstring>/i.exec(xml)?.[1];
+  const parsed = parseXml(xml);
+  if (parsed === undefined) {
+    throw new GatewayError("UPSTREAM_FAILED", `SOAP answer from ${fmName} is not well-formed XML`);
+  }
+  const fault = findElements(parsed, "faultstring")[0];
   if (fault !== undefined) {
-    throw new GatewayError("UPSTREAM_FAILED", `SOAP fault from ${fmName}: ${unescapeXml(fault).trim()}`);
+    throw new GatewayError("UPSTREAM_FAILED", `SOAP fault from ${fmName}: ${nodeTextOf(fault).trim()}`);
   }
+
   const outgoing: Record<string, string> = {};
-  for (const match of xml.matchAll(/<(?:[\w.-]+:)?([A-Z][A-Z0-9_]*)>([\s\S]*?)<\/(?:[\w.-]+:)?\1>/g)) {
-    const key = match[1];
-    const value = match[2];
-    if (key === undefined || value === undefined) continue;
-    outgoing[key] = unescapeXml(value);
-  }
+  const collect = (node: unknown): void => {
+    if (node === null || typeof node !== "object") return;
+    for (const [key, value] of Object.entries(node as Record<string, unknown>)) {
+      if (key.startsWith("@_") || key === "#text") continue;
+      if (/^[A-Z][A-Z0-9_]*$/.test(key)) {
+        const first = Array.isArray(value) ? value[0] : value;
+        // The XML parser keeps entities in `#text`, so a bridge that answers JSON comes back as
+        // `{&#34;PART&#34;:…}`. Without this decode every JSON-returning bridge reads as "no answer"
+        // (measured: SSF_CONTENT answered subrc=0 with a 218 kB payload and the
+        // SmartForm readers still reported "the bridge returned no XML").
+        outgoing[key] =
+          first !== null && typeof first === "object"
+            ? decodeXmlEntities(nodeTextOf(first as Record<string, unknown>))
+            : decodeXmlEntities(String(first ?? ""));
+        continue;
+      }
+      collect(value);
+    }
+  };
+  collect(parsed);
   return outgoing;
 }
 

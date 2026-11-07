@@ -82,6 +82,20 @@ const arg = (args: Args, name: string): string | undefined => {
   return typeof value === "string" && value.length > 0 ? value : undefined;
 };
 
+/**
+ * A boolean argument, however the caller spelled it.
+ *
+ * `arg()` above only returns strings, so `String(arg(args, "activate_on_update") ?? "") === "true"`
+ * was always false for a JSON `true` — measured live: `UpdateLocalTestClass
+ * {activate_on_update: true}` answered `activated: false` and left the test class inactive,
+ * i.e. the flag was declared, documented and ignored. Accept the boolean and the two string
+ * spellings; anything else is "not set".
+ */
+const flag = (args: Args, name: string): boolean => {
+  const value = args[name];
+  return value === true || value === "true" || value === "X";
+};
+
 const required = (args: Args, name: string, tool: string, alternatives: readonly string[] = []): string => {
   const value = arg(args, name) ?? alternatives.map((other) => arg(args, other)).find((found) => found !== undefined);
   if (value === undefined) {
@@ -168,7 +182,7 @@ export const BRIDGE_TOOL_NAMES: ReadonlySet<string> = new Set([
 
 /**
  * A GUI status is not written from scratch — it is copied from the reference status
- * and then edited (user ruling 2026-11-04: "copy STANDARD_FULLSCREEN from SAPLKKBL and
+ * and then edited (user ruling: "copy STANDARD_FULLSCREEN from SAPLKKBL and
  * change it").
  *
  * A status built from nothing carries no standard function codes (back / exit / cancel
@@ -177,6 +191,15 @@ export const BRIDGE_TOOL_NAMES: ReadonlySet<string> = new Set([
  */
 const REFERENCE_PROGRAM = "SAPLKKBL";
 const REFERENCE_STATUS = "STANDARD_FULLSCREEN";
+/**
+ * Programs tried in order when the bridge cannot read the preferred one's CUA.
+ *
+ * Measured: `GetGuiStatusList` lists 40 statuses for SAPLKKBL, but the CUA
+ * document the bridge reads for it comes back **empty**, so the copy-from-reference step failed on
+a * a release where the list and the document disagree. The candidates are the always-installed list
+ * ALV / selection-screen / message-class programs.
+ */
+const REFERENCE_CANDIDATES: readonly string[] = [REFERENCE_PROGRAM, "SAPMV45A", "SAPLSPO1", "SAPMSCC0", "SAPLALV_GRID"];
 
 /**
  * Narrows a whole reference CUA (which has ~40 statuses) to the one status being
@@ -193,14 +216,16 @@ export function narrowReferenceStatus(
   status: string,
   description: string | undefined,
   statusType: unknown,
+  referenceCode: string = REFERENCE_STATUS,
 ): CuaDocument | undefined {
+  const wanted = referenceCode.toUpperCase();
   const source = asRows(referenceDocument.STA).find(
-    (row) => String(row.CODE ?? "").toUpperCase() === REFERENCE_STATUS,
+    (row) => String(row.CODE ?? "").toUpperCase() === wanted,
   );
   if (source === undefined) return undefined;
 
   const refSet = asRows(referenceDocument.SET).filter(
-    (setRow) => String(setRow.STATUS ?? "").toUpperCase() === REFERENCE_STATUS,
+    (setRow) => String(setRow.STATUS ?? "").toUpperCase() === wanted,
   );
   const functions = new Set(refSet.map((setRow) => String(setRow.FUNCTION ?? "").trim()));
   const pfkCode = String(source.PFKCODE ?? "").trim();
@@ -234,19 +259,39 @@ async function createStatus(args: Args, ctx: ToolContext, runtime: GatewayRuntim
   const bridge = new RfcBridge(resolved.session);
 
   // Base: the whole reference CUA (it brings the function codes the status refers to).
-  let document: CuaDocument;
-  try {
-    document = await fetchCua(bridge, REFERENCE_PROGRAM, tool, { required: true });
-  } catch (error) {
+  let document: CuaDocument | undefined;
+  let referenceProgram = REFERENCE_PROGRAM;
+  for (const candidate of REFERENCE_CANDIDATES) {
+    const found = await tryFetchCua(bridge, candidate);
+    if (found !== undefined && hasCuaRows(found)) {
+      document = found;
+      referenceProgram = candidate;
+      break;
+    }
+  }
+  if (document === undefined) {
     throw new GatewayError(
       "UPSTREAM_FAILED",
-      `${tool}: could not read the reference status ${REFERENCE_STATUS} from ${REFERENCE_PROGRAM}: ${String((error as Error).message ?? error)}`,
-      { nextAction: `check that ${REFERENCE_PROGRAM} is readable in this system` },
+      `${tool}: no readable reference CUA among ${REFERENCE_CANDIDATES.join(", ")}; the bridge returned an empty document for each.`,
+      {
+        nextAction:
+          "pass a program the bridge can read (GuiStatus of a Z program with a status) or create the status with UpdateGuiStatus from a known CUA document",
+      },
     );
   }
   const reference = asRows(document.STA).find((row) => String(row.CODE ?? "").toUpperCase() === REFERENCE_STATUS);
-  if (reference === undefined) {
-    throw new GatewayError("UPSTREAM_FAILED", `${tool}: ${REFERENCE_PROGRAM} has no status ${REFERENCE_STATUS}.`, {
+  // Measured: `GetGuiStatusList SAPLKKBL` lists STANDARD_FULLSCREEN, but the
+  // CUA document the bridge reads does not contain it — so a hard failure here made the tool
+  // unusable on a release where the reference moved. Take the named status when it is there, and
+  // otherwise a status this document really has, preferring one that carries function keys (that is
+  // what the copy is for: back / exit / cancel / print / help).
+  const referenceCode =
+    reference !== undefined
+      ? REFERENCE_STATUS
+      : (asRows(document.STA).find((row) => String(row.PFKCODE ?? "").trim().length > 0)?.CODE ??
+        asRows(document.STA)[0]?.CODE);
+  if (referenceCode === undefined) {
+    throw new GatewayError("UPSTREAM_FAILED", `${tool}: ${REFERENCE_PROGRAM} returned no GUI status at all.`, {
       nextAction: `read ${REFERENCE_PROGRAM} with GetGuiStatus to see which statuses exist`,
     });
   }
@@ -261,9 +306,9 @@ async function createStatus(args: Args, ctx: ToolContext, runtime: GatewayRuntim
     });
   }
 
-  const narrowed = narrowReferenceStatus(document, status, description, args.status_type);
+  const narrowed = narrowReferenceStatus(document, status, description, args.status_type, String(referenceCode));
   if (narrowed === undefined) {
-    throw new GatewayError("UPSTREAM_FAILED", `${tool}: ${REFERENCE_PROGRAM} has no status ${REFERENCE_STATUS}.`, {
+    throw new GatewayError("UPSTREAM_FAILED", `${tool}: ${REFERENCE_PROGRAM} has no status ${String(referenceCode)}.`, {
       nextAction: `read ${REFERENCE_PROGRAM} with GetGuiStatus to see which statuses exist`,
     });
   }
@@ -276,7 +321,7 @@ async function createStatus(args: Args, ctx: ToolContext, runtime: GatewayRuntim
     program_name: program,
     status_name: status,
     created: true,
-    copied_from: `${REFERENCE_PROGRAM}/${REFERENCE_STATUS}`,
+    copied_from: `${referenceProgram}/${String(referenceCode)}`,
     statuses: asRows(document.STA).length,
     set_rows: asRows(document.SET).length,
     function_codes: asRows(document.FUN).length,
@@ -409,7 +454,18 @@ async function patchStatus(args: Args, ctx: ToolContext, runtime: GatewayRuntime
   const bridge = new RfcBridge(resolved.session);
   const document = await fetchCua(bridge, program, tool);
   await writeCua(bridge, program, mergeCua(document, changes));
-  return { success: true, transport: "rfc", program_name: program, patched: Object.keys(changes) };
+  return {
+    success: true,
+    transport: "rfc",
+    program_name: program,
+    patched: Object.keys(changes),
+    // Measured live: a patched `FUN` row really landed (it is in the full document),
+    // so `CUA_WRITE` writes the active version and the schema's `activate` has nothing to do.
+    // Say that instead of echoing the flag: a caller who passed `activate: true` used to see the
+    // flag vanish from the answer and could not tell whether the rows were live.
+    activated: true,
+    note: "CUA_WRITE has no inactive stage: the merged rows are written active.",
+  };
 }
 
 /**
@@ -477,7 +533,7 @@ function toPoolRow(type: string, key: string | undefined, text: string, program:
 
 const poolKey = (row: TextPoolRow): string => {
   const id = row.ID.toUpperCase();
-  // Measured 2026-11-04: the read lists the title with an empty KEY while the update
+  // Measured: the read lists the title with an empty KEY while the update
   // compared it against the first eight characters of the program name, so
   // `UpdateTextElement` answered "R/<program> does not exist" for a row it had just
   // returned. The title is identified by its ID alone.
@@ -593,7 +649,11 @@ async function writeTextElements(args: Args, ctx: ToolContext, runtime: GatewayR
     total_rows_written: rows.length,
     per_type: perType,
     replace_existing: replace,
-    activate: activate && !written.fellBack,
+    // Measured live: `WriteTextElementsBulk {activate: false}` answered
+    // `activate: false` **and** a note saying the rows were written active — the field said the
+    // opposite of the outcome. `activate` now reports what happened; the request is kept beside it.
+    activate: written.fellBack ? true : activate,
+    ...(written.fellBack ? { activate_requested: activate, activated_by_bridge: true } : {}),
     rfc_action: written.action,
     steps_completed: steps,
     ...(written.fellBack
@@ -612,16 +672,32 @@ async function changeTextElement(
 ): Promise<unknown> {
   const program = required(args, "program_name", tool).toUpperCase();
   const type = required(args, "text_type", tool).toUpperCase();
-  const key = arg(args, "key");
-  if (key === undefined && type !== "R") {
-    throw new GatewayError("INVALID_ARGUMENT", `${tool}: missing "key".`);
-  }
   const language = (arg(args, "language") ?? "").toUpperCase();
   const activate = args["activate"] === true;
 
   const resolved = runtime.resolve(ctx.system, arg(args, "session_id"), true);
   const bridge = new RfcBridge(resolved.session);
   const rows = await readPool(bridge, program, language);
+
+  // The contract lists `key` as optional on create, and SAP's own editor takes the next free
+  // number for you. Requiring it here answered `missing "key"` to a caller that sent exactly what
+  // the schema asked for (measured live ). Update/delete still need it: they have to
+  // name the row they change.
+  let key = arg(args, "key");
+  if (key === undefined && type !== "R") {
+    if (mode !== "create") {
+      throw new GatewayError("INVALID_ARGUMENT", `${tool}: missing "key".`, {
+        nextAction: `Pass the key the row has in the pool (GetTextElement lists them).`,
+      });
+    }
+    const used = rows
+      .filter((row) => row.ID === type)
+      .map((row) => Number(row.KEY))
+      .filter((value) => Number.isFinite(value) && value > 0);
+    const next = used.length === 0 ? 1 : Math.max(...used) + 1;
+    key = String(next).padStart(3, "0");
+  }
+
   const target = toPoolRow(type, key, "", program);
   const index = rows.findIndex((row) => poolKey(row) === poolKey(target));
 
@@ -799,6 +875,7 @@ async function writeLocalInclude(
   const include = `/oo/classes/${encodeURIComponent(className.toLowerCase())}/includes/${segment}`;
 
   const lock = await lockObject(resolved.session, include);
+  let status: number;
   try {
     const response = await resolved.session.request({
       method: "PUT",
@@ -807,24 +884,41 @@ async function writeLocalInclude(
       contentType: TEXT,
       body: source,
     });
-    return {
-      success: true,
-      class_name: className,
-      include: segment,
-      status: response.status,
-      characters: source.length,
-      activated: false,
-      ...(lock.corrNr === null ? {} : { corr_nr: lock.corrNr }),
-    };
+    status = response.status;
   } finally {
     await unlockObject(resolved.session, include, lock.lockHandle);
   }
+  // `activate_on_update` is declared on the four `UpdateLocal*` verbs but was never read, so a
+  // caller could not get the include into the active version without a second tool call (the
+  // write only touches the inactive one). Measured: `UpdateCdsUnitTest` answers
+  // `activated: false`, and the tests it wrote are not what `RunUnitTest` runs.
+  const activation = flag(args, "activate_on_update")
+    ? await activate(resolved.session, [
+          {
+            uri: `/sap/bc/adt/oo/classes/${encodeURIComponent(className.toLowerCase())}`,
+            name: className.toUpperCase(),
+            adtType: "CLAS/OC",
+          },
+        ])
+      : undefined;
+  return {
+    success: true,
+    class_name: className,
+    include: segment,
+    status,
+    characters: source.length,
+    activated: activation === undefined ? false : activation.ok,
+    ...(activation === undefined
+      ? {}
+      : { activation: { status: activation.status, errors: activation.errors, warnings: activation.warnings } }),
+    ...(lock.corrNr === null ? {} : { corr_nr: lock.corrNr }),
+  };
 }
 
 /**
  * Clearing a class's local include.
  *
- * Measured 2026-11-04: `DELETE /oo/classes/<c>/includes/definitions` answers **405**
+ * Measured: `DELETE /oo/classes/<c>/includes/definitions` answers **405**
  * "Resource controller does not support method DELETE" — there is no delete for an
  * include. What empties it is a PUT of an empty source under a lock, which is exactly what
  * the editor does when the last line is removed; the class is then activated so the empty
@@ -982,7 +1076,7 @@ export function registerBridgeTools(registry: ToolRegistry, runtime: GatewayRunt
   register("DeleteCdsUnitTest", (args, ctx) => deleteCdsUnitTest(args, ctx, runtime, "DeleteCdsUnitTest"));
 
   // A unit-test run is a read-only result: ADT offers POST (start), GET (status) and GET
-  // (result) on `/abapunit/runs`, and answers 405 to PUT and DELETE — measured 2026-11-04.
+  // (result) on `/abapunit/runs`, and answers 405 to PUT and DELETE — measured.
   register("UpdateUnitTest", async () => {
     throw new GatewayError(
       "NOT_IMPLEMENTED",

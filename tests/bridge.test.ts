@@ -83,6 +83,27 @@ describe("SOAP envelope", () => {
     expect(() => parseSoapResult(answer, "ZMCP_ADT_DISPATCH")).toThrow(/RFC_ERROR/);
   });
 
+  it("keeps a value that contains markup-looking text", () => {
+    // A `<TAG>value</TAG>` regex stopped at the first matching close tag inside the
+    // payload and truncated the answer without any error.
+    const answer =
+      '<soap-env:Envelope xmlns:soap-env="http://schemas.xmlsoap.org/soap/envelope/">' +
+      "<soap-env:Body><urn:ZMCP_ADT_DISPATCH.Response>" +
+      "<EV_RESULT>&lt;EV_SUBRC&gt;0&lt;/EV_SUBRC&gt;</EV_RESULT>" +
+      "<EV_SUBRC>0</EV_SUBRC>" +
+      "</urn:ZMCP_ADT_DISPATCH.Response></soap-env:Body></soap-env:Envelope>";
+
+    const parsed = parseSoapResult(answer, "ZMCP_ADT_DISPATCH");
+    expect(parsed.EV_RESULT).toBe("<EV_SUBRC>0</EV_SUBRC>");
+    expect(parsed.EV_SUBRC).toBe("0");
+  });
+
+  it("refuses an answer that is not well-formed XML instead of returning nothing", () => {
+    // Answering `{}` here made a transport failure look like "the FM returned no
+    // parameters", which callers then reported as a missing export.
+    expect(() => parseSoapResult("<Envelope><Body>", "ZMCP_ADT_DISPATCH")).toThrow(/well-formed/);
+  });
+
   it("sends the text-pool parameters flat, not wrapped in a JSON string", () => {
     // The text-pool function module reads IV_PROGRAM / IV_TEXTPOOL_JSON directly;
     // wrapping them the way the dispatcher wants fails with "IV_TEXTPOOL_JSON is
@@ -132,7 +153,7 @@ describe("route table", () => {
 
   it("keeps the caller's lock in the low-level GUI status delete", async () => {
     const registry = bootedRegistry();
-    await expect(registry.call("DeleteGuiStatusLow", { program_name: "ZZ_PROBE", status_name: "S" }, { system: "probe" }))
+    await expect(registry.call("DeleteGuiStatusLow", { program_name: "ZMMR_MCP_PROBE", status_name: "S" }, { system: "probe" }))
       .rejects.toThrow(/lock_handle/);
   });
 });
@@ -141,11 +162,11 @@ describe("class-local writes", () => {
   /** A session that answers the lock with a handle and records every request. */
   function lockedRegistry(): { call: (tool: string, args: Record<string, unknown>) => Promise<unknown>; requests: string[] } {
     const requests: string[] = [];
-    const fetchImpl = (async (input: RequestInfo | URL, init?: RequestInit) => {
+    const fetchImpl = (async (input: string | URL | Request, init?: RequestInit) => {
       const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
       requests.push(`${init?.method ?? "GET"} ${decodeURIComponent(url)}`);
       const body = /_action=LOCK/.test(url)
-        ? '<asx:abap><asx:values><DATA><LOCK_HANDLE>ABC123</LOCK_HANDLE><CORRNR>DS4K900001</CORRNR></DATA></asx:values></asx:abap>'
+        ? '<asx:abap><asx:values><DATA><LOCK_HANDLE>ABC123</LOCK_HANDLE><CORRNR>DEVK900001</CORRNR></DATA></asx:values></asx:abap>'
         : "<ok/>";
       return new Response(body, { status: 200, headers: { "x-csrf-token": "token" } });
     }) as typeof fetch;

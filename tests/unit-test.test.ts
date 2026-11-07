@@ -40,7 +40,7 @@ function bootedRegistry(served: (url: string) => { status: number; body: string 
   calls: Call[];
 } {
   const calls: Call[] = [];
-  const fetchImpl = (async (input: RequestInfo | URL, init?: RequestInit) => {
+  const fetchImpl = (async (input: string | URL | Request, init?: RequestInit) => {
     const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
     calls.push({ url, body: String(init?.body ?? "") });
     // The session asks for a CSRF token first; that request has to succeed or nothing else runs.

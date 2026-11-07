@@ -34,6 +34,10 @@ const FAIL_RULES = [
   { id: "absolute-user-path", re: /[A-Za-z]:[\\/]{1,2}(Users|Documents and Settings)[\\/]{1,2}[^\\/\s"']+/ },
   { id: "sap-url-with-host", re: /https?:\/\/[a-z0-9][a-z0-9.-]*\.(corp|local|internal|intranet|lcl)\b/i },
   { id: "private-ipv4", re: /\b(?:10\.\d{1,3}\.\d{1,3}\.\d{1,3}|192\.168\.\d{1,3}\.\d{1,3}|172\.(?:1[6-9]|2\d|3[01])\.\d{1,3}\.\d{1,3})\b/ },
+  // Transport numbers name the customer's system id (`<SID>K<number>`, and a SID may carry
+  // digits). Examples must use the neutral `DEVK` prefix (see docs/README.md), so anything
+  // else is a leaked real number.
+  { id: "sap-transport-number", re: /\b(?![D][E][V][K]\d)[A-Z][A-Z0-9]{1,5}K\d{6,8}\b/ },
 ];
 
 /** Patterns worth a look but that can be legitimate. */

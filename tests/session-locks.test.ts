@@ -11,7 +11,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { beforeEach, describe, expect, it } from "vitest";
 
-import { AdtSession } from "../src/adt/session.js";
+import { AdtSession, lockHandleFromBody } from "../src/adt/session.js";
 
 const LOCK_BODY =
   "<asx:abap><asx:values><DATA><LOCK_HANDLE>HANDLE0001</LOCK_HANDLE></DATA></asx:values></asx:abap>";
@@ -26,7 +26,7 @@ function sessionWith(
   answer: (sent: Sent) => { status: number; body: string; setCookie?: string[] },
 ): { session: AdtSession; sent: Sent[] } {
   const sent: Sent[] = [];
-  const fetchImpl = (async (input: RequestInfo | URL, init?: RequestInit) => {
+  const fetchImpl = (async (input: string | URL | Request, init?: RequestInit) => {
     const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
     const headers = Object.fromEntries(
       Object.entries((init?.headers ?? {}) as Record<string, string>).map(([key, value]) => [key.toLowerCase(), value]),
@@ -59,7 +59,7 @@ function sessionWith(
 }
 
 const lock = (session: AdtSession) =>
-  session.request({ method: "POST", path: "/programs/programs/zz_probe?_action=LOCK&accessMode=MODIFY", accept: "*/*" });
+  session.request({ method: "POST", path: "/programs/programs/zmmr_mcp_probe?_action=LOCK&accessMode=MODIFY", accept: "*/*" });
 
 beforeEach(() => {
   process.env["ABAP_ADT_MCP_LOCK_JOURNAL"] = join(mkdtempSync(join(tmpdir(), "session-locks-")), "locks.json");
@@ -111,14 +111,14 @@ describe("an expired CSRF token", () => {
   it("is fetched again and the write replayed once", async () => {
     let first = true;
     const { session, sent } = sessionWith((request) => {
-      if (request.url.includes("/programs/programs/zz_probe") && first) {
+      if (request.url.includes("/programs/programs/zmmr_mcp_probe") && first) {
         first = false;
         return { status: 403, body: "<exc:exception><message>CSRF token validation failed</message></exc:exception>" };
       }
       return { status: 200, body: "<ok/>" };
     });
 
-    const result = await session.request({ method: "PUT", path: "/programs/programs/zz_probe/source/main", accept: "*/*" });
+    const result = await session.request({ method: "PUT", path: "/programs/programs/zmmr_mcp_probe/source/main", accept: "*/*" });
 
     expect(result.status).toBe(200);
     const writes = sent.filter((entry) => entry.method === "PUT");
@@ -133,7 +133,14 @@ describe("an expired CSRF token", () => {
     }));
 
     await expect(
-      session.request({ method: "PUT", path: "/programs/programs/zz_probe/source/main", accept: "*/*" }),
+      session.request({ method: "PUT", path: "/programs/programs/zmmr_mcp_probe/source/main", accept: "*/*" }),
     ).rejects.toThrow(/CSRF/);
+  });
+
+  it("ignores an empty LOCK_HANDLE element", () => {
+    // `[^<]+` used to be the whole rule: an empty element fell through to the JSON
+    // fallback, and a handle padded by the release was the only shape ever tested.
+    expect(lockHandleFromBody("<asx:abap><asx:values><DATA><LOCK_HANDLE/></DATA></asx:values></asx:abap>")).toBeUndefined();
+    expect(lockHandleFromBody("{\"LOCK_HANDLE\":\"HANDLE0002\"}")).toBe("HANDLE0002");
   });
 });

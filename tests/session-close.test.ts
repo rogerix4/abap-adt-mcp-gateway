@@ -1,7 +1,7 @@
 /**
  * Ending a session is what releases its locks.
  *
- * Measured 2026-11-04: killing the client leaves the ABAP session alive server-side,
+ * Measured: killing the client leaves the ABAP session alive server-side,
  * and with it every session-scoped enqueue it holds (`DDACT_LOCK` for DDIC activation
  * was the one that piled up in SM12). So a one-shot caller must log off explicitly.
  */

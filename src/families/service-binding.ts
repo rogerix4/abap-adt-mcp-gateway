@@ -14,6 +14,7 @@
 import type { AdtSession } from "../adt/session.js";
 import { AdtError } from "../adt/errors.js";
 import { GatewayError } from "../engine/errors.js";
+import { childTextOf, decodeXmlEntities, findElements, nodeTextOf, parseXml } from "../adt/xml.js";
 import { escapeXml, lower, type CreateContext } from "./types.js";
 
 const BINDING_TYPES_PATH = "/businessservices/bindings/bindingtypes";
@@ -27,33 +28,23 @@ interface BindingType {
   readonly data: string;
 }
 
-function textOf(xml: string, tag: string): string {
-  const match = new RegExp(`<${tag}(?:\\s[^>]*)?>([\\s\\S]*?)</${tag}>`, "i").exec(xml);
-  return match?.[1]?.trim() ?? "";
-}
-
 function decodeXml(value: string): string {
-  return value
-    .replace(/&lt;/g, "<")
-    .replace(/&gt;/g, ">")
-    .replace(/&quot;/g, '"')
-    .replace(/&apos;/g, "'")
-    .replace(/&amp;/g, "&");
+  return decodeXmlEntities(value);
 }
 
 function bindingTypes(xml: string): BindingType[] {
-  const result: BindingType[] = [];
-  for (const match of xml.matchAll(/<nameditem:namedItem(?:\s[^>]*)?>([\s\S]*?)<\/nameditem:namedItem>/gi)) {
-    const body = match[1] ?? "";
-    const name = decodeXml(textOf(body, "nameditem:name"));
-    if (name.length === 0) continue;
-    result.push({
-      name: name.toUpperCase(),
-      description: decodeXml(textOf(body, "nameditem:description")),
-      data: decodeXml(textOf(body, "nameditem:data")).toUpperCase(),
-    });
-  }
-  return result;
+  // Structural: the answer nests `nameditem:namedItem` inside `nameditem:namedItems`, and
+  // a regex over that had to spell the namespace prefix exactly and could not decode an
+  // escaped description.
+  const parsed = parseXml(xml);
+  if (parsed === undefined) return [];
+  return findElements(parsed, "namedItem")
+    .map((item) => ({
+      name: (childTextOf(item, "name") ?? "").toUpperCase(),
+      description: childTextOf(item, "description") ?? "",
+      data: (childTextOf(item, "data") ?? "").toUpperCase(),
+    }))
+    .filter((entry) => entry.name.length > 0);
 }
 
 function wantedType(args: Readonly<Record<string, unknown>>): { readonly type: string; readonly version: string } {
@@ -229,7 +220,8 @@ export async function unpublishServiceBinding(
     contentType: "application/xml",
     body,
   });
-  const severity = /<SEVERITY>([^<]*)<\/SEVERITY>/i.exec(response.body)?.[1]?.trim().toUpperCase() ?? "";
+  const severityNode = findElements(parseXml(response.body) ?? {}, "SEVERITY")[0];
+  const severity = (severityNode === undefined ? "" : nodeTextOf(severityNode)).toUpperCase();
   if (severity === "ERROR" || severity === "ABORT" || severity === "E") {
     throw new GatewayError("UPSTREAM_FAILED", "The binding could not be unpublished before deletion.", {
       severity,

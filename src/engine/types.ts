@@ -9,6 +9,8 @@
 /** JSON Schema for a tool's arguments. MCP requires an object schema. */
 export interface ToolInputSchema {
   readonly type: "object";
+  /** The contract's own required list — enforced in `ToolRegistry.call`. */
+  readonly required?: readonly string[];
   readonly [key: string]: unknown;
 }
 

@@ -30,8 +30,8 @@ the two-step import is:
 
 1. Create the function group, then the module (ADT is fine for both).
 2. Turn on remote enablement through the SOAP RFC endpoint
-   (`RPY_FUNCTIONMODULE_INSERT` with `REMOTE_CALL='X'`), then write the source and
-   activate.
+ (`RPY_FUNCTIONMODULE_INSERT` with `REMOTE_CALL='X'`), then write the source and
+ activate.
 
 `tools/scripts/import-abap-bridges.mjs` does that in order and is safe to re-run: an
 existing module is skipped, not overwritten.

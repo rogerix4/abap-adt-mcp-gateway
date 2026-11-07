@@ -55,7 +55,9 @@ const MODULES = [
     group: "ZMCP_ADT_UTILS",
     file: "ZMCP_ADT_TEXTPOOL.abap",
     text: "text pool read/write",
-    smoke: { IV_ACTION: "READ", IV_PROGRAM: "ZFIR0094", IV_LANGUAGE: "1" },
+    // The smoke call needs a program that has a text pool; keep it in an env var so no
+    // customer object name lives in this repository.
+    smoke: { IV_ACTION: "READ", IV_PROGRAM: process.env.SMOKE_PROGRAM ?? "ZDEMO_REPORT", IV_LANGUAGE: "1" },
   },
   {
     fm: "ZMCP_ADT_DISPATCH",
@@ -180,7 +182,7 @@ const registry = createRegistry();
 registerFamilies(registry, runtime);
 const call = async (tool, args) => {
   const result = await registry.call(tool, args, { system: "import" });
-  // Measured 2026-11-04: `ActivateObjects` answers `success: false` with the compile
+  // Measured: `ActivateObjects` answers `success: false` with the compile
   // errors in `messages`, and the importer used to print "ok activate" over it.
   if (result !== null && typeof result === "object" && result.success === false) {
     const detail = result.status ?? result.message ?? JSON.stringify(result).slice(0, 200);

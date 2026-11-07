@@ -100,7 +100,7 @@ interface Booted {
 function booted(answer: (action: string, params: Record<string, unknown>) => Record<string, unknown>): Booted {
   const actions: string[] = [];
   const params: string[] = [];
-  const fetchImpl = (async (input: RequestInfo | URL, init?: RequestInit) => {
+  const fetchImpl = (async (input: string | URL | Request, init?: RequestInit) => {
     const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
     if (!url.includes("/sap/bc/soap/rfc")) {
       return new Response("<ok/>", { status: 200, headers: { "x-csrf-token": "token" } });
@@ -178,11 +178,23 @@ describe("GetSmartFormLayout", () => {
     });
     await expect(call("GetSmartFormLayout", { form_name: "ZPROBE_FORM" })).rejects.toThrow(/no active version/);
   });
+
+  it("reports a form that does not exist as not-found, not as a server failure", async () => {
+    // Measured live: `GetSmartFormContent {form_name: "ZMM_SF_MCP_NEVER9"}` answered
+    // `UPSTREAM_FAILED` with "SmartForm ZMM_SF_MCP_NEVER9 does not exist", so a caller branching
+    // on `not-found` read a wrong name as a broken system.
+    const { call } = booted(() => {
+      throw new Error("SSF_CONTENT error (action=SSF_CONTENT, subrc=4): SmartForm ZPROBE_FORM does not exist");
+    });
+    await expect(call("GetSmartFormContent", { form_name: "ZPROBE_FORM" })).rejects.toMatchObject({
+      code: "not-found",
+    });
+  });
 });
 
 describe("GetSmartFormContent", () => {
   it("derives the node outline and the text lines from the same XML", async () => {
-    const { call, actions } = booted((action, params) => {
+    const { call, actions } = booted((_action, params) => {
       if (params["part"] === "STYLE") return { PART: "STYLE", NAME: "ZSTYLE1", CSS: ".x{color:red}" };
       if (params["part"] === "TEXTS") return { PART: "TEXTS", COUNT: 1, LINES: [{ TEXT: "hello" }] };
       return formAnswer();
@@ -195,6 +207,7 @@ describe("GetSmartFormContent", () => {
       pages: { windows: { nodes: { type: string; lines?: string[] }[] }[] }[];
       graphics: { fetched: boolean };
       xml?: string;
+      files: { content: string; xml: string };
     };
 
     expect(actions.filter((action) => action === "SSF_CONTENT")).toHaveLength(3);
@@ -202,7 +215,13 @@ describe("GetSmartFormContent", () => {
     expect(content.styles[0]).toEqual({ name: "ZSTYLE1", css: ".x{color:red}" });
     expect(content.texts).toEqual(["hello"]);
     expect(content.graphics.fetched).toBe(false);
-    expect(content.xml).toContain("<sf:SMARTFORM");
+    // The Form Builder XML is written to disk instead of being repeated in the answer
+    // (128 KB for a real form); `files` is what the description promises.
+    expect(content.xml).toBeUndefined();
+    expect(readFileSync(content.files.xml, "utf8")).toContain("<sf:SMARTFORM");
+    const written = JSON.parse(readFileSync(content.files.content, "utf8")) as { pages: unknown[]; xml: string };
+    expect(written.xml).toContain("<sf:SMARTFORM");
+    expect(written.pages).toHaveLength(1);
 
     const nodes = content.pages[0]!.windows.flatMap((window) => window.nodes);
     const text = nodes.find((node) => node.type === "TX");
@@ -211,15 +230,27 @@ describe("GetSmartFormContent", () => {
   });
 
   it("answers with the counts only when summary is set", async () => {
-    const { call } = booted(() => formAnswer());
-    const content = (await call("GetSmartFormContent", { form_name: "ZPROBE_FORM", summary: true, include_styles: false })) as {
+    const { call } = booted((_action, params) =>
+      params["part"] === "STYLE" ? { PART: "STYLE", NAME: "ZSTYLE1", CSS: ".x{color:red}" } : formAnswer(),
+    );
+    const content = (await call("GetSmartFormContent", { form_name: "ZPROBE_FORM", summary: true })) as {
       pages?: unknown;
       xml?: string;
       window_count: number;
+      windows: Array<Record<string, unknown>>;
+      symbols: string[];
+      styles: Array<Record<string, unknown>>;
+      files: { content: string; xml: string };
     };
     expect(content.pages).toBeUndefined();
     expect(content.xml).toBeUndefined();
     expect(content.window_count).toBe(2);
+    // The overview the description promises: windows per page and the &symbols& the form uses.
+    expect(content.windows[0]).toMatchObject({ name: "MAIN", type: "M", top_mm: 51 });
+    expect(content.symbols).toEqual(["WERKS"]);
+    // An overview carries the size of the CSS, not the stylesheet (~8 KB for a real style).
+    expect(content.styles[0]).toEqual({ name: "ZSTYLE1", css_chars: 13 });
+    expect(readFileSync(content.files.content, "utf8")).toContain("<sf:SMARTFORM");
   });
 });
 
@@ -232,7 +263,7 @@ describe("CreateSmartForm", () => {
 
   it("sends the XML and the flags the caller asked for", async () => {
     const { call, params } = booted(() => ({
-      FORM_NAME: "ZMCP_PROBE",
+      FORM_NAME: "ZMM_SF_MCP_PROBE",
       LANGUAGE: "E",
       STORED: "X",
       ACTIVE: "X",
@@ -241,14 +272,14 @@ describe("CreateSmartForm", () => {
     }));
 
     const created = (await call("CreateSmartForm", {
-      form_name: "ZMCP_PROBE",
+      form_name: "ZMM_SF_MCP_PROBE",
       xml_file: xmlFile(),
       overwrite: true,
     })) as { stored: boolean; active: boolean; generated_fm?: string; package_name: string };
 
     expect(created).toMatchObject({ stored: true, active: true, package_name: "$TMP", generated_fm: "/1BCDWB/SF00000001" });
     const sent = JSON.parse(params[0] ?? "{}") as Record<string, string>;
-    expect(sent["form_name"]).toBe("ZMCP_PROBE");
+    expect(sent["form_name"]).toBe("ZMM_SF_MCP_PROBE");
     expect(sent["overwrite"]).toBe("X");
     expect(sent["activate"]).toBe("X");
     expect(sent["xml"]).toContain("<sf:SMARTFORM");
@@ -256,7 +287,7 @@ describe("CreateSmartForm", () => {
 
   it("fails when activation produced no generated function module", async () => {
     const { call } = booted(() => ({
-      FORM_NAME: "ZMCP_PROBE",
+      FORM_NAME: "ZMM_SF_MCP_PROBE",
       LANGUAGE: "E",
       STORED: "X",
       ACTIVE: "X",
@@ -265,13 +296,13 @@ describe("CreateSmartForm", () => {
     }));
 
     await expect(
-      call("CreateSmartForm", { form_name: "ZMCP_PROBE", xml_file: xmlFile() }),
+      call("CreateSmartForm", { form_name: "ZMM_SF_MCP_PROBE", xml_file: xmlFile() }),
     ).rejects.toThrow(/generated no function module/);
   });
 
   it("asks for an inactive form with N, because an empty string means 'not passed'", async () => {
     const { call, params } = booted(() => ({
-      FORM_NAME: "ZMCP_PROBE",
+      FORM_NAME: "ZMM_SF_MCP_PROBE",
       LANGUAGE: "E",
       STORED: "X",
       ACTIVE: "",
@@ -280,7 +311,7 @@ describe("CreateSmartForm", () => {
     }));
 
     const created = (await call("CreateSmartForm", {
-      form_name: "ZMCP_PROBE",
+      form_name: "ZMM_SF_MCP_PROBE",
       xml_file: xmlFile(),
       activate: false,
     })) as { active: boolean; generated_fm?: string };
@@ -295,10 +326,10 @@ describe("CreateSmartForm", () => {
   it("refuses a transport and a transportable package before it writes anything", async () => {
     const { call, actions } = booted(() => formAnswer());
     await expect(
-      call("CreateSmartForm", { form_name: "ZMCP_PROBE", xml_file: xmlFile(), transport_request: "DS4K900001" }),
+      call("CreateSmartForm", { form_name: "ZMM_SF_MCP_PROBE", xml_file: xmlFile(), transport_request: "DEVK900001" }),
     ).rejects.toThrow(/transport request/);
     await expect(
-      call("CreateSmartForm", { form_name: "ZMCP_PROBE", xml_file: xmlFile(), package_name: "ZSD" }),
+      call("CreateSmartForm", { form_name: "ZMM_SF_MCP_PROBE", xml_file: xmlFile(), package_name: "ZSD" }),
     ).rejects.toThrow(/transportable/);
     expect(actions).toEqual([]);
   });
@@ -314,7 +345,7 @@ describe("CreateSmartForm", () => {
 describe("DeleteSmartForm", () => {
   it("is a dry run unless the caller confirms", async () => {
     const { call, params } = booted(() => ({
-      FORM_NAME: "ZMCP_PROBE",
+      FORM_NAME: "ZMM_SF_MCP_PROBE",
       DRY_RUN: "X",
       DELETED: "",
       PACKAGE_NAME: "$TMP",
@@ -322,7 +353,7 @@ describe("DeleteSmartForm", () => {
       TADIR_LEFT: "",
     }));
 
-    const answer = (await call("DeleteSmartForm", { form_name: "ZMCP_PROBE" })) as {
+    const answer = (await call("DeleteSmartForm", { form_name: "ZMM_SF_MCP_PROBE" })) as {
       dry_run: boolean;
       deleted: boolean;
       nextAction?: string;
@@ -334,12 +365,12 @@ describe("DeleteSmartForm", () => {
 
   it("reports the delete and a leftover TADIR entry", async () => {
     const { call } = booted(() => ({
-      FORM_NAME: "ZMCP_PROBE",
+      FORM_NAME: "ZMM_SF_MCP_PROBE",
       DELETED: "X",
       PACKAGE_NAME: "$TMP",
       TADIR_LEFT: "X",
     }));
-    const answer = (await call("DeleteSmartForm", { form_name: "ZMCP_PROBE", confirm: true })) as {
+    const answer = (await call("DeleteSmartForm", { form_name: "ZMM_SF_MCP_PROBE", confirm: true })) as {
       dry_run: boolean;
       deleted: boolean;
       tadir_left: boolean;

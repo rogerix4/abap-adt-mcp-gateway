@@ -38,7 +38,7 @@ export const defaultConfig = (): EffectiveConfig => ({
     expose: "gateway",
     allow: [],
     // Hidden, not deleted: ADT has no PUT and no DELETE on `/abapunit/runs/{id}` — measured
-    // 2026-11-05, both answer "405 Resource controller does not support method …" (the
+    //, both answer "405 Resource controller does not support method …" (the
     // discovery document lists no other run resource either). A tool that can only ever
     // fail is not worth a slot in the model's budget; it stays callable by name and answers
     // with that reason, so nothing is lost for a caller that insists.

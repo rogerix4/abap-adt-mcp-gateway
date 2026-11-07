@@ -5,7 +5,7 @@
  * (`program_name`, `class_name`, `table_name`, …) and are meant to be a uniform front
  * end over the same operations the per-object tools expose.
  *
- * Measured 2026-11-04: they were wired straight to ADT routes with `bodyFrom: "body"`,
+ * Measured: they were wired straight to ADT routes with `bodyFrom: "body"`,
  * an argument no schema declares — so every call posted an empty body and SAP answered
  * `the system expected element '{…}objectReferences'` (or `{…}abapProgram`, `{…}checkObjectList`).
  * Here each call is re-dispatched to the tool that already knows the payload, with the
@@ -54,7 +54,7 @@ function targetOf(args: Args, tool: string, verb: string): { readonly target: Ta
       accepted: Object.keys(TARGETS).join(", "),
     });
   }
-  // Measured 2026-11-04: the contract names the object per type on Get/Create/Update/
+  // Measured: the contract names the object per type on Get/Create/Update/
   // Delete (`table_name`, `program_name`, …) but always `object_name` on Lock/Unlock/
   // Activate/CheckRun/Validate.
   const perType = verb === "Get" || verb === "Create" || verb === "Update" || verb === "Delete";
@@ -110,7 +110,7 @@ export function registerHandlerTools(registry: ToolRegistry, runtime: GatewayRun
   }
 
   // `CreateTransportLow` has no `target_system` in its contract, and the upstream server
-  // sends `tm:target="LOCAL"` for exactly this tool (user ruling 2026-11-05: "write that
+  // sends `tm:target="LOCAL"` for exactly this tool (user ruling: "write that
   // target the way upstream does"). A LOCAL request is what the command-line flows expect:
   // it is the same request without a target system, and the transport organizer still
   // answers with its number.

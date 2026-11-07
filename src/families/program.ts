@@ -12,7 +12,7 @@ const ACCEPT = "application/vnd.sap.adt.programs.programs.v2+xml";
 /**
  * ADT program type codes, as the upstream baseline sends them (1 / I / M / F / K / J).
  *
- * Measured 2026-11-04: this attribute is **ignored** by the create endpoint on our
+ * Measured: this attribute is **ignored** by the create endpoint on our
  * stack — a program requested as `module_pool` is created as `executableProgram`
  * (`TRDIR-SUBC = 1`), with either the numeric code or the document's own vocabulary
  * (`programType="modulePool"`), and a later PUT of the document does not change it

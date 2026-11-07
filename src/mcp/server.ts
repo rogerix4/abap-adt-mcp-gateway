@@ -13,6 +13,8 @@
  *   `McpServer` installs what it needs.
  */
 
+import { statSync } from "node:fs";
+
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import {
@@ -24,6 +26,7 @@ import {
 
 import { GatewayError } from "../engine/errors.js";
 import { ToolRegistry } from "../engine/registry.js";
+import { CATALOG_URL, loadCatalog } from "../core/catalog.js";
 import { advertisesFacade, compileExpose, DEFAULT_EXPOSE, type Expose } from "../engine/expose.js";
 import type { ToolEffect, ToolMeta } from "../engine/types.js";
 import { AdtError } from "../adt/errors.js";
@@ -78,6 +81,40 @@ function isDestructive(effect: ToolEffect, verb: string): boolean {
   }
   // Creating something new is not destructive; removing or overwriting is.
   return verb === "Delete" || verb === "Update" || verb === "Activate" || verb === "Release";
+}
+
+/**
+ * Re-reads `tools/catalog.json` when it changed on disk.
+ *
+ * Schema-only edits (new optional arguments, better descriptions) then take effect on the
+ * next `tools/list` — clients re-request the tool list every turn, so no process restart is
+ * needed (: this client has no restart action for a user-level server). Code
+ * changes still need a new process: the running `dist` is what executes.
+ */
+let catalogStamp: string | undefined;
+
+function catalogStampNow(): string {
+  try {
+    const stats = statSync(CATALOG_URL);
+    return `${stats.mtimeMs}:${stats.size}`;
+  } catch {
+    return "missing";
+  }
+}
+
+function refreshCatalog(registry: ToolRegistry): void {
+  const stamp = catalogStampNow();
+  if (catalogStamp === undefined) {
+    catalogStamp = stamp;
+    return;
+  }
+  if (stamp === catalogStamp) return;
+  try {
+    registry.reloadDefinitions(loadCatalog());
+    catalogStamp = stamp;
+  } catch {
+    // Keep serving the last good contract; the next call retries.
+  }
 }
 
 function toTool(registry: ToolRegistry, info: GatewayInfo): Tool[] {
@@ -186,7 +223,10 @@ export function createGatewayServer(options: GatewayServerOptions): McpServer {
   // answer is `false` — a client that subscribes will simply never hear from us.
   mcp.server.registerCapabilities({ tools: { listChanged: false } });
 
-  mcp.server.setRequestHandler(ListToolsRequestSchema, async () => ({ tools: toTool(registry, info) }));
+  mcp.server.setRequestHandler(ListToolsRequestSchema, async () => {
+    refreshCatalog(registry);
+    return { tools: toTool(registry, info) };
+  });
 
   /**
    * One ADT session per system is reused across calls, and a session is stateful: two

@@ -16,6 +16,17 @@
 
 import { AdtError } from "./errors.js";
 import { ADT_BASE, type AdtSession } from "./session.js";
+import { hasSignal } from "./signals.js";
+import {
+  attributeOf,
+  escapeXmlText,
+  findElements,
+  messageTextOf,
+  parseXml,
+  plainText,
+  rootElement,
+  rootNameOf,
+} from "./xml.js";
 
 export const ACCEPT_LOCK =
   "application/vnd.sap.as+xml;charset=UTF-8;dataname=com.sap.adt.lock.result;q=0.8, " +
@@ -49,6 +60,11 @@ export interface ActivationReport {
   readonly errors: number;
   readonly warnings: number;
   readonly raw: string;
+  /**
+   * Set when the answer was neither empty nor a message list this gateway can read.
+   * `ok` is false in that case: an unreadable answer is not a successful activation.
+   */
+  readonly unrecognized?: string;
 }
 
 export interface SourceComparison {
@@ -56,13 +72,9 @@ export interface SourceComparison {
   readonly detail?: string;
 }
 
+/** Escapes text for an XML attribute. Kept as a local export for existing callers. */
 export function escapeXml(value: string): string {
-  return value
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&apos;");
+  return escapeXmlText(value).replace(/'/g, "&apos;");
 }
 
 function textOfTag(body: string, tag: string): string | undefined {
@@ -211,32 +223,53 @@ export async function activate(
   });
 
   const empty = response.body.trim().length === 0;
-  // Two shapes, and only the first one was understood before: `<msg severity="error">`
-  // and the checklist form `<msg type="E" ...>`. Measured 2026-11-04 on a domain:
-  // the activation answered **200** carrying `type="E"` ("One of the objects is locked
-  // in another activation"), was read as "activated", and the object silently kept its
-  // old definition.
-  const messages = [...response.body.matchAll(/<msg\b([^>]*)>([\s\S]*?)<\/msg>/gi)].map((match) => {
-    const attrs = match[1] ?? "";
-    const body = match[2] ?? "";
-    const severity = (/severity="([^"]*)"/i.exec(attrs)?.[1] ?? /type="([^"]*)"/i.exec(attrs)?.[1] ?? "").toLowerCase();
-    const text = /<txt>([\s\S]*?)<\/txt>/i.exec(body)?.[1] ?? "";
-    return { severity, text: text.replace(/<[^>]+>/g, "").trim() };
+  // Read the report structurally. Two shapes used to be two regex branches — `<msg
+  // severity="error">` and the checklist form `<msg type="E" …>` — and only the first one
+  // was understood: measured on a domain, the activation answered **200**
+  // carrying `type="E"` ("One of the objects is locked in another activation"), was read
+  // as "activated", and the object silently kept its old definition.
+  const parsed = empty ? undefined : parseXml(response.body);
+  const messages = (parsed === undefined ? [] : findElements(parsed, "msg")).map((msg) => {
+    const severity = (attributeOf(msg, "severity") ?? attributeOf(msg, "type") ?? "").toLowerCase();
+    // Entities are decoded by the parser, so an escape SAP sent once reaches the caller as
+    // the character it stands for (`LO_WORKSHEET->SET_CELL(`, not `…-&gt;SET_CELL(`).
+    return { severity, text: messageTextOf(msg) };
   });
   const isError = (severity: string): boolean => severity === "error" || severity === "e" || severity === "a";
   const errors = messages.filter((message) => isError(message.severity)).length;
   const warnings = messages.filter((message) => message.severity === "warning" || message.severity === "w").length;
 
+  // A non-empty answer we cannot read is **not** success. Before this, any shape other
+  // than `<msg>` (an HTML error page, a newer report element) counted as zero errors and
+  // the caller read "activated" while the object kept its old version — the exact failure
+  // mode this file already fixed twice by adding one more shape branch.
+  //
+  // `<chkl:messages>` carrying only `<chkl:properties>` is the platform's own "nothing to
+  // report" answer — captured live:
+  //   <chkl:messages><chkl:properties checkExecuted="false" activationExecuted="false"
+  //     generationExecuted="true"/></chkl:messages>
+  // Its attributes do **not** prove activation (the incident of an earlier round shows
+  // `generationExecuted=true` on an object that stayed inactive); the read-back in
+  // `activateAndVerify` is what answers that question.
+  const rootName = parsed === undefined ? undefined : rootNameOf(parsed);
+  const emptyReport = rootName === "messages";
+  const unrecognized =
+    empty || messages.length > 0 || emptyReport
+      ? undefined
+      : `the activation answered a document this gateway cannot read (${response.body.length} bytes, root <${rootElement(response.body) ?? "?"}>): ${plainText(response.body).slice(0, 200)}`;
+
   return {
-    ok: errors === 0,
+    ok: errors === 0 && unrecognized === undefined,
     status:
-      errors > 0
-        ? `activation reported ${errors} error(s): ${messages.find((message) => isError(message.severity))?.text ?? ""}`.trim()
+      unrecognized ??
+      (errors > 0
+        ? `activation reported ${errors} error(s): ${firstUsefulError(messages)}`.trim()
         : empty
           ? "activated (empty response)"
-          : "activated",
+          : "activated"),
     errors,
     warnings,
+    ...(unrecognized === undefined ? {} : { unrecognized }),
     raw: response.body.length > 4000 ? `${response.body.slice(0, 4000)}…` : response.body,
   };
 }
@@ -247,6 +280,37 @@ export async function readSource(
   version: "active" | "inactive" = "active",
 ): Promise<string> {
   return session.text({ path: `${sourcePath}?version=${version}`, accept: ACCEPT_SOURCE });
+}
+
+/**
+ * Fails with `not-found` when the object behind a source path is gone.
+ *
+ * Reading `source/main` of an object that has been deleted makes SAP's workbench resource raise
+ * CX_OO_CLIF_NOT_EXISTS uncaught, and the target system writes a short dump for it — measured
+ *: every probe run that read a deleted object twice left two dumps behind.
+ * A name that never existed does not dump; a deleted one does. The object document answers a
+ * clean 404, so a read asks for it first and only then for the source.
+ *
+ * Only an explicit 404 counts as "gone": a 406 (the resource speaks another media type) or a 403
+ * must not turn a readable object into a not-found.
+ */
+export async function assertObjectExists(session: AdtSession, sourcePath: string): Promise<void> {
+  const objectPath = sourcePath.replace(/\/source\/main$/, "");
+  if (objectPath === sourcePath) return;
+  const missing = await session
+    .requestAcceptingAny({ path: objectPath, accept: "*/*" })
+    .then(() => false)
+    .catch((error: unknown) => error instanceof AdtError && error.code === "not-found");
+  if (!missing) return;
+  throw new AdtError({
+    code: "not-found",
+    message: `No such object: ${objectPath}`,
+    nextAction:
+      "Check the name with SearchObject. A deleted object answers 404, and reading its source would leave a dump in the target system.",
+    status: 404,
+    method: "GET",
+    path: objectPath,
+  });
 }
 
 /**
@@ -265,21 +329,83 @@ export function normalizeSource(text: string): string {
 }
 
 /**
- * Drops blank lines entirely.
+ * Collapses whitespace outside quoted text, and ignores case there too.
  *
- * Needed for objects SAP stores in sections and re-joins on read: a function
- * module's signature and implementation come back separated by blank lines the
- * caller never wrote, so a line-for-line comparison fails on every successful
- * write. Every non-blank line still has to match, in order.
+ * A DDL source is re-formatted on save: SAP lines the colons up (`key id     : abap.int4`
+ * where the caller wrote `key id : abap.int4`) and lower-cases the object name. Measured on
+ * Measured: the write and the activation both succeeded, the stored text was
+ * equivalent, and the tool still answered `activated: false` with a mismatch on line 8 —
+ * the kind of false alarm that makes a caller rewrite working code.
+ *
+ * Outside a literal, ABAP and DDL are case-insensitive, so folding case there cannot hide a
+ * real difference; inside a literal (which is compared verbatim) it could, hence the scan.
+ */
+function collapseOutsideLiterals(text: string): string {
+  let out = "";
+  let quoted = false;
+  let pendingSpace = false;
+  for (let index = 0; index < text.length; index += 1) {
+    const char = text[index] ?? "";
+    if (char === "'") {
+      // `''` inside a literal is an escaped quote, not the end of it.
+      if (quoted && text[index + 1] === "'") {
+        out += "''";
+        index += 1;
+        continue;
+      }
+      quoted = !quoted;
+      out += char;
+      continue;
+    }
+    if (!quoted && /\s/.test(char)) {
+      pendingSpace = out.length > 0;
+      continue;
+    }
+    if (pendingSpace) {
+      out += " ";
+      pendingSpace = false;
+    }
+    out += quoted ? char : char.toUpperCase();
+  }
+  return out;
+}
+
+/**
+ * Drops blank lines and the formatting SAP imposes on the text it stores.
+ *
+ * Needed for objects SAP stores in sections and re-joins on read: a function module's
+ * signature and implementation come back separated by blank lines the caller never wrote, so
+ * a line-for-line comparison fails on every successful write. Every non-blank line still has
+ * to match, in order, after the whitespace and case outside literals is folded away.
  */
 export function normalizeLooseSource(text: string): string {
   return normalizeSource(text)
     .split("\n")
+    .map((line) => collapseOutsideLiterals(line).trim())
     .filter((line) => line.length > 0)
     .join("\n");
 }
 
-export function compareSource(written: string, active: string, options?: { loose?: boolean }): SourceComparison {
+export function compareSource(
+  written: string,
+  active: string,
+  options?: { loose?: boolean; tokens?: boolean },
+): SourceComparison {
+  // `tokens` ignores line boundaries as well as case and whitespace: SAP re-lays-out some sources
+  // (a function module's signature is stored in its own section and comes back split onto separate
+  // lines), and *how* it does that depends on the system's editor/pretty-printer setup, so a
+  // line-based comparison cannot be right in general. Comparing the token stream still catches a
+  // real difference — a missing statement or a changed literal.
+  if (options?.tokens === true) {
+    const left = collapseOutsideLiterals(normalizeSource(written));
+    const right = collapseOutsideLiterals(normalizeSource(active));
+    if (left === right) return { equal: true };
+    const at = [...left].findIndex((char, index) => char !== [...right][index]);
+    return {
+      equal: false,
+      detail: `token streams differ at character ${at < 0 ? Math.min(left.length, right.length) : at}: wrote ${JSON.stringify(left.slice(Math.max(0, at - 20), at + 40))}, active has ${JSON.stringify(right.slice(Math.max(0, at - 20), at + 40))}`,
+    };
+  }
   const normalise = options?.loose === true ? normalizeLooseSource : normalizeSource;
   const left = normalise(written);
   const right = normalise(active);
@@ -311,16 +437,39 @@ export interface VerifiedActivation {
  */
 export async function activateAndVerify(
   session: AdtSession,
-  entry: ActivationEntry & { readonly sourcePath: string; readonly source: string; readonly loose?: boolean },
+  entry: ActivationEntry & {
+    readonly sourcePath: string;
+    readonly source: string;
+    readonly loose?: boolean;
+    readonly tokens?: boolean;
+  },
 ): Promise<VerifiedActivation> {
   const report = await activate(session, [entry]);
   const active = await readSource(session, entry.sourcePath, "active");
-  const comparison = compareSource(entry.source, active, entry.loose === undefined ? undefined : { loose: entry.loose });
+  const comparison = compareSource(entry.source, active, {
+    ...(entry.loose === undefined ? {} : { loose: entry.loose }),
+    ...(entry.tokens === undefined ? {} : { tokens: entry.tokens }),
+  });
   // `report.ok` has to count: a CDS view whose draft text was stored verbatim has an
   // "equal" active source even when the activation **failed** to generate it — measured
-  // 2026-11-04, `ActivateCdsViewLow` answered `activated: true` while the report said
+  //, `ActivateCdsViewLow` answered `activated: true` while the report said
   // "The column landx is unknown" and nothing had been generated.
   return { report, comparison, activated: report.ok && comparison.equal };
+}
+
+/**
+ * The error text worth showing.
+ *
+ * SAP writes its own summary first — `Activation was cancelled.` on this release — and the reason
+ * it was cancelled after it. Reporting the summary made every failed activation look alike, so the
+ * check had to be run by hand to learn anything.
+ */
+function firstUsefulError(entries: readonly { severity: string; text: string }[]): string {
+  const errors = entries.filter(
+    (entry) => (entry.severity === "e" || entry.severity === "error") && entry.text.trim().length > 0,
+  );
+  const useful = errors.find((entry) => !/cancelled|abgebrochen|已取消/i.test(entry.text)) ?? errors[0];
+  return useful?.text.trim() ?? "";
 }
 
 export interface CheckMessage {
@@ -342,40 +491,52 @@ export interface CheckResult {
 }
 
 /**
- * Pulls the message list out of a `checkmessages` document.
+ * The parsed message list, and whether the document was a check document at all.
  *
- * Returning only counts was not enough: "Can't save due to errors in source"
- * comes from a different endpoint and says nothing about *what* is wrong, so the
- * check has to hand the texts back.
+ * `recognized: false` is the case that used to read as `errors: 0`: a body this parser
+ * did not understand looked exactly like a clean check. Callers must not turn that into
+ * "checked and clean" — see `runCheck`.
  */
-function parseCheckMessages(body: string): CheckMessage[] {
+interface ParsedCheckMessages {
+  readonly messages: readonly CheckMessage[];
+  readonly recognized: boolean;
+}
+
+/**
+ * Reads a `checkruns` answer structurally.
+ *
+ * SAP has shipped this answer in two shapes — `<chkrun:checkMessage …/>` with the text as
+ * an **attribute**, and `<chkrun:message>` with an inner `<chkrun:shortText>` — and the
+ * second one was once unknown: measured on a CDS view, every check reported
+ * `errors: 0` for a source SAP refuses to activate. Each new shape then cost one more
+ * regex branch. A parser plus a root-name check has no such gap: either the document is
+ * a check report (then every message element is found, whatever its prefix or nesting),
+ * or it is not, and the caller is told rather than handed a zero.
+ */
+function parseCheckMessages(body: string): ParsedCheckMessages {
+  if (body.trim().length === 0) return { messages: [], recognized: true };
+  const parsed = parseXml(body);
+  if (parsed === undefined) return { messages: [], recognized: false };
+
+  const root = rootNameOf(parsed) ?? "";
+  // Three wrappers exist in the wild: `<chkrun:checkMessages>` (the plain reporter),
+  // `<chkrun:checkObjectList>` and `<chkrun:checkRunReports>` (the CDS reporter, captured
+  // ). A document that carries a `checkReport` element is a check answer too,
+  // whatever it is wrapped in — that is the whole point of reading it structurally.
+  const recognized =
+    root === "checkMessages" || root === "checkObjectList" || root === "checkRunReports" || findElements(parsed, "checkReport").length > 0;
+
+  // `checkMessage` is the checklist form, `message` the older one; take whichever the
+  // document carries instead of concatenating both and counting duplicates.
+  const checklist = findElements(parsed, "checkMessage");
+  const nodes = checklist.length > 0 ? checklist : findElements(parsed, "message");
+
   const messages: CheckMessage[] = [];
-  const decodeXml = (value: string): string =>
-    value
-      .replace(/&quot;/g, '"')
-      .replace(/&apos;/g, "'")
-      .replace(/&lt;/g, "<")
-      .replace(/&gt;/g, ">")
-      .replace(/&amp;/g, "&");
-
-  // Two shapes, and only one of them was understood before. Measured 2026-11-04 on a
-  // CDS view: SAP answered `<chkrun:checkMessage chkrun:type="E"
-  // chkrun:shortText="The column landx is unknown" …/>` — a *different* element name
-  // (`checkMessage`, not `message`) carrying the text as an **attribute**, and
-  // self-closing. The old parser demanded `<chkrun:message>` with an inner
-  // `<chkrun:shortText>`, so it found nothing and every check reported
-  // `errors: 0` — a source SAP refuses to activate was reported as clean.
-  const attributeForm = /<chkrun:checkMessage\b([^>]*?)(?:\/>|>([\s\S]*?)<\/chkrun:checkMessage>)/g;
-  for (const match of body.matchAll(attributeForm)) {
-    const attributes = match[1] ?? "";
-    const inner = match[2] ?? "";
-    const severity = /chkrun:type="([^"]*)"/.exec(attributes)?.[1] ?? "unknown";
-    const uri = /chkrun:uri="([^"]*)"/.exec(attributes)?.[1];
-    const attributeText = /chkrun:shortText="([^"]*)"/.exec(attributes)?.[1];
-    const line = /chkrun:line="(\d+)"/.exec(attributes)?.[1] ?? /#start=(\d+),/.exec(uri ?? "")?.[1];
-    const innerText = /<chkrun:shortText[^>]*>([\s\S]*?)<\/chkrun:shortText>/.exec(inner)?.[1]?.trim();
-    const plain = inner.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
-    const text = decodeXml((attributeText ?? innerText ?? plain).trim());
+  for (const node of nodes) {
+    const severity = attributeOf(node, "type") ?? "unknown";
+    const uri = attributeOf(node, "uri");
+    const line = attributeOf(node, "line") ?? /#start=(\d+),/.exec(uri ?? "")?.[1];
+    const text = messageTextOf(node);
     if (text.length === 0) continue;
     messages.push({
       severity,
@@ -385,26 +546,7 @@ function parseCheckMessages(body: string): CheckMessage[] {
     });
   }
 
-  for (const match of body.matchAll(/<chkrun:message\b([^>]*)>([\s\S]*?)<\/chkrun:message>/g)) {
-    const attributes = match[1] ?? "";
-    const inner = match[2] ?? "";
-    const severity = /chkrun:type="([^"]*)"/.exec(attributes)?.[1] ?? "unknown";
-    const uri = /chkrun:uri="([^"]*)"/.exec(attributes)?.[1];
-    const line = /chkrun:line="(\d+)"/.exec(attributes)?.[1];
-    const rawShortText = /<chkrun:shortText[^>]*>([\s\S]*?)<\/chkrun:shortText>/.exec(inner)?.[1]?.trim();
-    const shortText = rawShortText === undefined ? undefined : decodeXml(rawShortText);
-    const plain = decodeXml(inner.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim());
-    const text = shortText ?? plain;
-    if (text.length === 0) continue;
-    messages.push({
-      severity,
-      text,
-      ...(uri === undefined ? {} : { uri }),
-      ...(line === undefined ? {} : { line: Number(line) }),
-    });
-  }
-
-  return messages;
+  return { messages, recognized };
 }
 
 /**
@@ -455,7 +597,7 @@ export async function runCheck(
         raw: "",
       };
     }
-    if (/already checked|is not checked/i.test(text)) {
+    if (hasSignal(text, "already-checked")) {
       return {
         errors: 0,
         warnings: 0,
@@ -468,7 +610,24 @@ export async function runCheck(
     throw error;
   }
 
-  const messages = parseCheckMessages(response.body);
+  const parsed = parseCheckMessages(response.body);
+  const messages = parsed.messages;
+  // Fail closed. An unrecognised check document is not a clean object: before this,
+  // every shape the parser did not know produced `errors: 0`, and a source SAP refuses
+  // to activate was handed back as "checked, no errors" (measured on a CDS
+  // view). Throw so the caller sees the raw text instead of a green check.
+  if (!parsed.recognized) {
+    throw new AdtError({
+      code: "unrecognized-response",
+      message: `The check answered a document this gateway cannot read (${response.body.length} bytes, no chkrun element). Reporting 0 errors here would claim a check that never happened.`,
+      nextAction:
+        "Read sapText (the raw answer), then add this shape to parseCheckMessages with a fixture. Do not treat the object as checked.",
+      status: response.status,
+      method: "POST",
+      path: "/checkruns?reporters=abapCheckRun",
+      sapText: plainText(response.body).slice(0, 400),
+    });
+  }
   if (!retried && looksLikeStaleSession(messages)) {
     session.reset();
     return runCheck(session, uri, version, true);
@@ -482,9 +641,7 @@ export async function runCheck(
   // safe reading is: reset once, then check the active version, which is what the
   // deliverable actually is.
   const missingReport = messages.some(
-    (message) =>
-      /^[ea]$/i.test(message.severity) &&
-      /REPORT\/PROGRAM statement is missing|program type is INCLUDE/i.test(message.text),
+    (message) => /^[ea]$/i.test(message.severity) && hasSignal(message.text, "report-statement-missing"),
   );
   const hasReportStatement = (source: string): boolean => /\b(REPORT|PROGRAM)\s+[\w/]/i.test(source);
   const sourcePath = `${uri.startsWith(ADT_BASE) ? uri.slice(ADT_BASE.length) : uri}/source/main`;
@@ -548,7 +705,7 @@ export async function runCheck(
  */
 function looksLikeStaleSession(messages: readonly CheckMessage[]): boolean {
   const errors = messages.filter((message) => /^[ea]$/i.test(message.severity));
-  if (errors.some((message) => /fixed point arithmetic/i.test(message.text))) return true;
+  if (errors.some((message) => hasSignal(message.text, "fixed-point-arithmetic"))) return true;
   const texts = errors.map((message) => message.text);
   return new Set(texts).size < texts.length;
 }
@@ -557,6 +714,15 @@ export interface DeletionResult {
   readonly deleted: boolean;
   readonly status: number;
   readonly detail?: string;
+  /**
+   * True when SAP says the object is not there at all.
+   *
+ * Measured: `DeleteInclude` on an include whose main program had already been
+   * deleted answered `not-found: Object directory entry was not found` **at the lock step** — the
+   * caller's goal (the object is gone) was already reached, so that is a success with a note, not
+   * an error.
+   */
+  readonly alreadyGone?: boolean;
   /** False when the object is gone but its lock could not be released. */
   readonly lock_released?: boolean;
   /** SAP's own words when the release failed — the caller must see this, not guess. */
@@ -570,7 +736,7 @@ export interface DeletionResult {
  * implementation was selected for the current BAdI`), and a bare DELETE answers
  * 404 — both measured. This is the path that works.
  *
- * Measured on the reference system (2026-11-04): the DELETE removes the object but **not** the
+ * Measured on the reference system: the DELETE removes the object but **not** the
  * name-level enqueue. `GetProgram` then answers `404 The object is locked: user X is
  * currently editing it` and the name can never be created again — for as long as the
  * session lives, which for a gateway is forever. So the lock is released explicitly
@@ -581,10 +747,24 @@ export async function deleteObject(
   relUri: string,
   transport?: string,
 ): Promise<DeletionResult> {
-  // A delete outside `$TMP` needs `corrNr` — measured 2026-11-04: `DeleteMetadataExtension`
+  // A delete outside `$TMP` needs `corrNr` — measured: `DeleteMetadataExtension`
   // answered HTTP 400 "Parameter corrNr could not be found" although the caller had
   // passed `transport_request`, because this function never forwarded it.
-  const lock = await lockObject(session, relUri);
+  const lock = await lockObject(session, relUri).catch((error: unknown) => {
+    // The object is gone: no TADIR entry, so no lock. The goal of a delete is already reached.
+    if (error instanceof AdtError && error.code === "not-found") {
+      return undefined;
+    }
+    throw error;
+  });
+  if (lock === undefined) {
+    return {
+      deleted: false,
+      status: 404,
+      alreadyGone: true,
+      detail: "SAP has no object at this URI, so there was nothing to delete",
+    };
+  }
   let deleted = false;
   let status = 0;
   let detail: string | undefined;

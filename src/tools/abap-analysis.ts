@@ -214,10 +214,94 @@ function collectSymbols(model: Record<string, unknown>): SymbolEntry[] {
   return symbols;
 }
 
-/** Names the statements mention: `CALL FUNCTION 'x'`, `TYPE y`, `sy-*`. */
+/** Names the statements mention: `CALL FUNCTION 'x'`, `PERFORM y`, `TYPE z`, `sy-*`. */
 interface Reference {
   readonly name: string;
-  readonly kind: "function_module" | "type" | "system_field" | "class";
+  readonly kind: "function_module" | "type" | "system_field" | "class" | "form";
+}
+
+const DECLARATION_KINDS: Readonly<Record<string, string>> = {
+  DATA: "variable",
+  "CLASS-DATA": "variable",
+  STATICS: "variable",
+  CONSTANTS: "constant",
+  TYPES: "type",
+  PARAMETERS: "parameter",
+  "SELECT-OPTIONS": "select_option",
+  "FIELD-SYMBOLS": "field_symbol",
+  RANGES: "range",
+};
+
+/** Words that follow a declaration keyword but are not the declared name. */
+const NOT_A_NAME = new Set([
+  "BEGIN",
+  "END",
+  "OF",
+  "TYPE",
+  "LIKE",
+  "VALUE",
+  "LENGTH",
+  "DECIMALS",
+  "OCCURS",
+  "WITH",
+  "HEADER",
+  "LINE",
+  "TABLE",
+  "RANGE",
+  "DEFAULT",
+  "REF",
+  "TO",
+  "FOR",
+  "IS",
+  "INITIAL",
+]);
+
+/**
+ * Declarations written inside the source itself.
+ *
+ * Measured live: `GetAbapSemanticAnalysis` on a report with `DATA: lv_x TYPE i.` answered
+ * `symbol_count: 0`, because only the class / interface / form model was read — the local
+ * `DATA` / `CONSTANTS` / `TYPES` / `PARAMETERS` names were invisible. Token scanning is the only
+ * source for them: abaplint's model does not carry report-level declarations.
+ */
+function collectLocalSymbols(tokens: readonly string[]): SymbolEntry[] {
+  const found: SymbolEntry[] = [];
+  const seen = new Set<string>();
+  const push = (raw: string, kind: string): void => {
+    const name = raw.replace(/^</, "").replace(/>$/, "");
+    if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(name)) return;
+    const upper = name.toUpperCase();
+    if (NOT_A_NAME.has(upper) || seen.has(upper)) return;
+    seen.add(upper);
+    found.push({ name: upper, kind, scope: "procedure" });
+  };
+
+  for (let index = 0; index < tokens.length; index += 1) {
+    const keyword = (tokens[index] ?? "").toUpperCase();
+    const kind = DECLARATION_KINDS[keyword];
+    if (kind === undefined) continue;
+    // Inline declaration: `DATA(lv_x) = …`.
+    if ((tokens[index + 1] ?? "") === "(") {
+      push(tokens[index + 2] ?? "", kind);
+      continue;
+    }
+    let cursor = index + 1;
+    if ((tokens[cursor] ?? "") === ":") cursor += 1;
+    // `FIELD-SYMBOLS <fs>` arrives as `<` `fs` `>` on this parser.
+    if ((tokens[cursor] ?? "") === "<") cursor += 1;
+    while (cursor < tokens.length) {
+      const token = tokens[cursor] ?? "";
+      const upperToken = token.toUpperCase();
+      // `END OF itab` closes a `BEGIN OF` group; it declares nothing.
+      if (upperToken === "." || upperToken === "END") break;
+      push(token, kind);
+      // Walk to the end of this entry: `DATA: a TYPE i, b TYPE i.`
+      while (cursor < tokens.length && tokens[cursor] !== "," && tokens[cursor] !== ".") cursor += 1;
+      if (tokens[cursor] !== ",") break;
+      cursor += 1;
+    }
+  }
+  return found;
 }
 
 function collectReferences(tokens: readonly string[]): Reference[] {
@@ -233,6 +317,12 @@ function collectReferences(tokens: readonly string[]): Reference[] {
     if (upper === "FUNCTION" && (tokens[index - 1] ?? "").toUpperCase() === "CALL") {
       const name = (tokens[index + 1] ?? "").replace(/^'|'$/g, "");
       if (/^[A-Za-z0-9_/]+$/.test(name)) add(name.toUpperCase(), "function_module");
+      continue;
+    }
+    // `PERFORM name` / `PERFORM name USING …`; a dynamic `PERFORM (var)` is not a name.
+    if (upper === "PERFORM") {
+      const name = tokens[index + 1] ?? "";
+      if (/^[A-Za-z0-9_/]+$/.test(name)) add(name.toUpperCase(), "form");
       continue;
     }
     if (upper === "TYPE") {
@@ -294,12 +384,13 @@ function getAst(args: Args): unknown {
 function getSemanticAnalysis(args: Args): unknown {
   const tool = "GetAbapSemanticAnalysis";
   const parsed = parse(source(args, tool));
-  const symbols = collectSymbols(parsed.model);
+  const symbols = [...collectSymbols(parsed.model), ...collectLocalSymbols(parsed.tokens)];
   const references = collectReferences(parsed.tokens);
 
   const answer = {
     success: true,
     parser: "@abaplint/core",
+    analysis_level: "parse",
     statement_count: parsed.statementCount,
     parsing_issues: parsed.issues,
     // The object model the parser built: the same information SE80 shows per class.
@@ -309,6 +400,10 @@ function getSemanticAnalysis(args: Args): unknown {
     reference_count: references.length,
     references,
     scope_count: new Set(symbols.map((symbol) => symbol.scope ?? "")).size,
+    note:
+      "Parse level: this reads declarations, the class/interface/form model and the names the code " +
+      "mentions. It does not type-check — an assignment of 'ABC' to an integer field is not reported " +
+      "here. Use Check*Low / Activate on a real object for the compiler's verdict.",
   };
   const file = writeWhenAsked(arg(args, "filePath"), answer);
   return file === undefined ? answer : { ...answer, file };

@@ -59,27 +59,27 @@ describe("a read-only tier", () => {
   it("refuses a write that goes through the route table", async () => {
     const { call } = booted("qa");
     await expect(
-      call("LockObjectLow", { object_type: "program", object_name: "zz_probe" }),
+      call("LockObjectLow", { object_type: "program", object_name: "zmmr_mcp_probe" }),
     ).rejects.toMatchObject({ code: "SYSTEM_READ_ONLY" });
   });
 
   it("refuses a write that goes through the RFC bridge", async () => {
     const { call } = booted("qa");
     await expect(
-      call("PatchGuiStatus", { program_name: "zz_probe", changes: { ADM: {}, STA: [] } }),
+      call("PatchGuiStatus", { program_name: "zmmr_mcp_probe", changes: { ADM: {}, STA: [] } }),
     ).rejects.toMatchObject({ code: "SYSTEM_READ_ONLY" });
   });
 
   it("still serves the reads, including the bridged ones", async () => {
     const { call } = booted("qa");
     // GetTextElement reads the pool through the same function module the writes use.
-    const result = (await call("GetTextElement", { program_name: "zz_probe" })) as { success?: boolean };
+    const result = (await call("GetTextElement", { program_name: "zmmr_mcp_probe" })) as { success?: boolean };
     expect(result.success).toBe(true);
   });
 
   it("lets the same write through on a dev tier", async () => {
     const { call, state } = booted("dev");
-    await call("LockObjectLow", { object_type: "program", object_name: "zz_probe" });
+    await call("LockObjectLow", { object_type: "program", object_name: "zmmr_mcp_probe" });
     expect(state.sent).toBeGreaterThan(0);
   });
 });

@@ -14,12 +14,13 @@
  */
 
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { ToolRegistry, ToolContext } from "../engine/registry.js";
 import type { GatewayRuntime } from "../runtime.js";
 import { GatewayError } from "../engine/errors.js";
+import { AdtError } from "../adt/errors.js";
 import { RfcBridge } from "../adt/rfc.js";
+import { hasSignal } from "../adt/signals.js";
 
 type Args = Record<string, unknown>;
 
@@ -398,8 +399,24 @@ const reader = (runtime: GatewayRuntime, ctx: ToolContext, args: Args, tool: str
       const message = String((error as Error).message ?? error);
       // Only a dispatcher-level failure ("could not be called", subrc=8) means the bridge
       // is missing; "SmartForm X does not exist" is an ordinary refusal and keeps its words.
-      const bridgeProblem = /could not be called|subrc=8/i.test(message);
+      const bridgeProblem = hasSignal(message, "bridge-missing");
+      // A form that does not exist is the caller's input, not an SAP fault: measured live
+      //, `GetSmartFormContent {form_name: "ZMCP_NEVER_FORM9"}` answered
+      // `UPSTREAM_FAILED` with "SmartForm ZMCP_NEVER_FORM9 does not exist", so a caller
+      // branching on `not-found` saw a server problem instead of a wrong name.
+      const missing = /does not exist|不存在/i.test(message);
       const details = (error as { details?: Record<string, unknown> }).details;
+      if (missing) {
+        throw new AdtError({
+          code: "not-found",
+          message: `${tool}: ${message}`,
+          nextAction:
+            "check the form name; the bridge reads the ACTIVE version only, so a form that was never activated cannot be read",
+          status: 404,
+          method: "RFC",
+          path: action,
+        });
+      }
       throw new GatewayError("UPSTREAM_FAILED", `${tool}: ${message}`, {
         ...(details ?? {}),
         ...(bridgeProblem
@@ -454,6 +471,21 @@ async function getLayout(args: Args, ctx: ToolContext, runtime: GatewayRuntime):
     page_formats: layout.page_formats,
     pages: layout.pages,
   };
+}
+
+/** `&SYMBOL&` names the form uses, in source order and without duplicates. */
+function symbolsIn(xml: string): string[] {
+  const plain = xml
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"')
+    .replace(/&amp;/g, "&");
+  const found: string[] = [];
+  for (const match of plain.matchAll(/&([A-Za-z_][A-Za-z0-9_]*)&/g)) {
+    const name = (match[1] ?? "").toUpperCase();
+    if (name !== "" && !found.includes(name)) found.push(name);
+  }
+  return found;
 }
 
 async function getContent(args: Args, ctx: ToolContext, runtime: GatewayRuntime): Promise<unknown> {
@@ -514,7 +546,54 @@ async function getContent(args: Args, ctx: ToolContext, runtime: GatewayRuntime)
     },
   };
 
-  return summary ? base : { ...base, pages: layout.pages, xml };
+  // The description promises the files, and `summary` promises an overview of them: before
+  // nothing was written (no `files`, no `<form>.content.json`) and the full content
+  // tree plus 128 KB of Form Builder XML came back in the answer instead.
+  const dir = join(outputDir(), "smartforms", name);
+  const contentFile = join(dir, `${name}.content.json`);
+  const xmlFile = join(dir, `${name}.form.xml`);
+  const full = { ...base, pages: layout.pages, windows: windowsOverview(layout), symbols: symbolsIn(xml), xml };
+  try {
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(contentFile, `${JSON.stringify(full, null, 2)}\n`, "utf8");
+    writeFileSync(xmlFile, xml, "utf8");
+  } catch (error) {
+    throw new GatewayError(
+      "INVALID_ARGUMENT",
+      `${tool}: cannot write to "${dir}": ${String((error as Error).message ?? error)}.`,
+      { nextAction: "check ABAP_ADT_MCP_OUTPUT_DIR and its permissions" },
+    );
+  }
+
+  return summary
+    ? {
+        ...base,
+        // The CSS of one SmartStyle is ~8 KB; an overview says how much there is, and the full
+        // text is in `files.content`.
+        styles: styles.map((style) =>
+          style.error === undefined
+            ? { name: style.name, css_chars: (style.css ?? "").length }
+            : { name: style.name, error: style.error },
+        ),
+        windows: windowsOverview(layout),
+        symbols: symbolsIn(xml),
+        files: { content: contentFile, xml: xmlFile },
+      }
+    : { ...base, pages: layout.pages, files: { content: contentFile, xml: xmlFile } };
+}
+
+/** `{page, name, caption, type, top_mm, height_mm}` per window — the overview `summary` promises. */
+function windowsOverview(layout: ReturnType<typeof layoutOf>): Array<Record<string, unknown>> {
+  return layout.pages.flatMap((page) =>
+    page.windows.map((window) => ({
+      page: page.name,
+      name: window.name,
+      caption: window.caption,
+      type: window.type,
+      ...(window.top === undefined ? {} : { top_mm: window.top.mm }),
+      ...(window.height === undefined ? {} : { height_mm: window.height.mm }),
+    })),
+  );
 }
 
 async function createForm(args: Args, ctx: ToolContext, runtime: GatewayRuntime): Promise<unknown> {
@@ -605,13 +684,10 @@ async function deleteForm(args: Args, ctx: ToolContext, runtime: GatewayRuntime)
 }
 
 /**
- * Where the rendered files go. Overridable, because the agent's temp directory is not
- * where a user wants to look for a PDF.
+ * Where the rendered files go — one place for every file the gateway writes, so the
+ * override (`ABAP_ADT_MCP_OUTPUT_DIR`) is read the same way here and for `output: "file"`.
  */
-function outputDir(): string {
-  const configured = process.env["ABAP_ADT_MCP_OUTPUT_DIR"];
-  return configured !== undefined && configured.trim() !== "" ? configured : join(tmpdir(), "abap-adt-mcp");
-}
+import { outputDir } from "./output-dir.js";
 
 async function renderForm(args: Args, ctx: ToolContext, runtime: GatewayRuntime): Promise<unknown> {
   const tool = "RenderSmartForm";
@@ -650,7 +726,7 @@ async function renderForm(args: Args, ctx: ToolContext, runtime: GatewayRuntime)
     const details = (error as { details?: Record<string, unknown> }).details;
     throw new GatewayError("UPSTREAM_FAILED", `${tool}: ${message}`, {
       ...(details ?? {}),
-      ...(/has no generated function module/i.test(message)
+      ...(hasSignal(message, "no-generated-function-module")
         ? { nextAction: `activate ${name} in SMARTFORMS, then render it again` }
         : {}),
     });

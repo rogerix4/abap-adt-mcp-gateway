@@ -1,58 +1,64 @@
 /**
- * Minimal XML patching for read-modify-write updates.
+ * XML surgery for read-modify-write updates.
  *
- * DDIC objects are updated by reading the current document, changing the fields
- * the caller asked for, and putting the whole thing back. Building the document
- * from scratch instead loses every field SAP manages (`adtcore:responsible`,
- * `masterSystem`, timestamps, server-side defaults).
+ * DDIC objects are updated by reading the current document, changing the fields the
+ * caller asked for, and putting the whole thing back. Building the document from scratch
+ * instead loses every field SAP manages (`adtcore:responsible`, `masterSystem`,
+ * timestamps, server-side defaults).
  *
- * These helpers assume the well-formed, attribute-quoted XML that ADT returns.
+ * Why a scanner and not a parse-then-serialise round trip: the document belongs to SAP.
+ * Re-serialising rewrites every byte the caller did not ask to change — the declaration,
+ * self-closing forms, attribute order, namespace layout, entity spelling — and the PUT
+ * then differs from what was read in ways nobody can explain. This module therefore
+ * *locates* the target and replaces exactly that span.
+ *
+ * What the scanner fixes compared with the regexes it replaces:
+ *
+ *   - **Nesting.** `<tag>[\s\S]*?</tag>` stops at the first `</tag>`, so a same-name child
+ *     truncated the parent and appended a stray end tag. Depth is counted here.
+ *   - **Quoted values.** `[^>]*` stops at a `>` inside an attribute value.
+ *   - **Comments and CDATA.** A tag inside `<!-- … -->` used to be a valid match.
+ *
+ * The API is unchanged, including the two behaviours callers already depend on:
+ * only the **first** matching element is touched, and a missing tag leaves the document
+ * untouched (`descriptors.ts` relies on the latter to detect an absent field).
  */
 
-/** Replaces the text of `<prefix:tag>…</prefix:tag>`, or inserts it if absent. */
+import { findAttribute, findClose, findStartTag } from "./xml-scan.js";
+import { escapeXmlAttribute, escapeXmlText } from "./xml.js";
+
+/**
+ * Replaces the text of the first `<prefix:tag>…</prefix:tag>`.
+ *
+ * A missing tag leaves the document untouched; a self-closing tag is expanded.
+ */
 export function patchElement(xml: string, tag: string, value: string): string {
-  const open = new RegExp(`<${escapeForRegex(tag)}(\\s[^>]*)?>[\\s\\S]*?</${escapeForRegex(tag)}>`);
-  if (open.test(xml)) {
-    return xml.replace(open, (match) => {
-      const openTag = /^<[^>]+>/.exec(match)?.[0] ?? `<${tag}>`;
-      return `${openTag}${escapeXmlText(value)}</${tag}>`;
-    });
+  const open = findStartTag(xml, tag, 0);
+  if (open === undefined) return xml;
+  if (open.selfClosing) {
+    const openTag = `${xml.slice(open.start, open.openEnd - 2)}>`;
+    return `${xml.slice(0, open.start)}${openTag}${escapeXmlText(value)}</${tag}>${xml.slice(open.openEnd)}`;
   }
-  // Self-closing form.
-  const selfClosing = new RegExp(`<${escapeForRegex(tag)}(\\s[^>]*)?/>`);
-  if (selfClosing.test(xml)) {
-    return xml.replace(selfClosing, (match) => {
-      const openTag = match.slice(0, -2) + ">";
-      return `${openTag}${escapeXmlText(value)}</${tag}>`;
-    });
-  }
-  return xml;
+  const close = findClose(xml, tag, open.openEnd);
+  if (close === undefined) return xml;
+  return `${xml.slice(0, open.openEnd)}${escapeXmlText(value)}${xml.slice(close.start)}`;
 }
 
 /** Replaces an attribute value on the first element that has it. */
 export function patchAttribute(xml: string, attribute: string, value: string): string {
-  const pattern = new RegExp(`(${escapeForRegex(attribute)})="[^"]*"`);
-  if (!pattern.test(xml)) return xml;
-  return xml.replace(pattern, `$1="${escapeXmlAttribute(value)}"`);
+  const hit = findAttribute(xml, attribute, 0);
+  if (hit === undefined) return xml;
+  return `${xml.slice(0, hit.valueStart)}${escapeXmlAttribute(value)}${xml.slice(hit.valueEnd)}`;
 }
 
 /** Replaces a whole block `<tag>…</tag>` (or its self-closing form) with raw XML. */
 export function patchBlock(xml: string, tag: string, block: string): string {
-  const paired = new RegExp(`<${escapeForRegex(tag)}(\\s[^>]*)?>[\\s\\S]*?</${escapeForRegex(tag)}>`);
-  if (paired.test(xml)) return xml.replace(paired, block);
-  const selfClosing = new RegExp(`<${escapeForRegex(tag)}(\\s[^>]*)?/>`);
-  if (selfClosing.test(xml)) return xml.replace(selfClosing, block);
-  return xml;
+  const open = findStartTag(xml, tag, 0);
+  if (open === undefined) return xml;
+  if (open.selfClosing) return `${xml.slice(0, open.start)}${block}${xml.slice(open.openEnd)}`;
+  const close = findClose(xml, tag, open.openEnd);
+  if (close === undefined) return xml;
+  return `${xml.slice(0, open.start)}${block}${xml.slice(close.end)}`;
 }
 
-export function escapeXmlText(value: string): string {
-  return value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-}
-
-export function escapeXmlAttribute(value: string): string {
-  return escapeXmlText(value).replace(/"/g, "&quot;");
-}
-
-function escapeForRegex(value: string): string {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-}
+export { escapeXmlAttribute, escapeXmlText };

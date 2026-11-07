@@ -12,6 +12,7 @@ import { randomUUID } from "node:crypto";
 
 import { AdtError, classifyResponse, networkError } from "./errors.js";
 import { LockJournal, lockJournalFor } from "./lock-journal.js";
+import { findElements, nodeTextOf, parseXml } from "./xml.js";
 
 export type AdtMethod = "GET" | "POST" | "PUT" | "DELETE";
 
@@ -54,7 +55,11 @@ export const ADT_BASE = "/sap/bc/adt";
 
 /** The lock handle in a LOCK answer, in either shape SAP sends it. */
 export function lockHandleFromBody(body: string): string | undefined {
-  const xml = /<LOCK_HANDLE>([^<]+)<\/LOCK_HANDLE>/i.exec(body)?.[1]?.trim();
+  // Structural, not `<LOCK_HANDLE>([^<]+)</LOCK_HANDLE>`: the element may be empty or
+  // carry surrounding whitespace, and the value is one leaf of an `asx:abap` envelope.
+  const parsed = parseXml(body);
+  const node = parsed === undefined ? undefined : findElements(parsed, "LOCK_HANDLE")[0];
+  const xml = node === undefined ? undefined : nodeTextOf(node);
   if (xml !== undefined && xml.length > 0) return xml;
   const json = /"LOCK_HANDLE"\s*:\s*"([^"]+)"/i.exec(body)?.[1]?.trim();
   return json !== undefined && json.length > 0 ? json : undefined;
@@ -78,7 +83,7 @@ interface LockTarget {
  * taken by the plain `Lock*` tools and by deletes, not only by the high-level lock
  * helper — a journal that only sees one of those paths leaves the rest unreleasable.
  *
- * Measured on the reference system (2026-11-04): `DELETE ...?lockHandle=` deletes the object but
+ * Measured on the reference system: `DELETE ...?lockHandle=` deletes the object but
  * leaves the name-level enqueue behind, so a delete must **not** be journaled as
  * "handle consumed". Treating it that way dropped the only handle that could ever
  * have released it — the object then answered `404 The object is locked: user X is
@@ -329,7 +334,7 @@ export class AdtSession {
   /**
    * Ends the ABAP session, which is what releases its session-scoped enqueues.
    *
-   * Measured 2026-11-04: a killed client does **not** end the session — SAP keeps the
+ * Measured: a killed client does **not** end the session — SAP keeps the
    * stateful context alive and with it every lock it took, `DDACT_LOCK` (DDIC
    * activation) included. A one-shot caller that just exits therefore leaves locks
    * behind that nobody can release. `GET /sap/public/bc/icf/logoff` ends the session
@@ -382,9 +387,22 @@ export class AdtSession {
     };
   }
 
+  /**
+   * True when this logon's journal still lists the handle.
+   *
+ * Measured live: `UnlockProgramLow` with an invented handle answered
+   * `success: true` while the object stayed locked — SAP accepts an UNLOCK for a handle it
+   * does not know with a plain 200. The journal is the only client-side evidence of what
+   * this logon is actually holding (it is written by LOCK and cleared by UNLOCK), so an
+   * unlock can say "released" only for a handle the journal knew.
+   */
+  holdsLock(handle: string): boolean {
+    if (handle.length === 0) return false;
+    return Object.values(this.#lockJournal().read()).includes(handle);
+  }
+
   async #ensureCsrf(): Promise<void> {
     if (this.#csrfToken !== undefined) return;
-
     const response = await this.#send(
       {
         method: "GET",

@@ -6,6 +6,9 @@
  * asserted here rather than trusted.
  */
 
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+
 import { describe, expect, it } from "vitest";
 
 import { AdtSession } from "../src/adt/session.js";
@@ -14,6 +17,10 @@ import { implementedFamilies, registerFamilies } from "../src/families/index.ts"
 import { GatewayRuntime } from "../src/runtime.ts";
 
 const CSRF = { status: 200, headers: { "x-csrf-token": "t" }, body: "<d/>" };
+
+// Every file that locks needs its own journal: a shared one makes LOCK release a stale
+// entry first, which shifts each scripted response by one request.
+process.env["ABAP_ADT_MCP_LOCK_JOURNAL"] = join(tmpdir(), `locks-families-${process.pid}.json`);
 
 function system(tier = "dev") {
   return {
@@ -227,7 +234,7 @@ describe("create then read", () => {
 
 describe("family content shapes", () => {
   it("writes DDIC source to source/main as text/plain", async () => {
-    // Measured 2026-11-04: the object document of a table carries no content element
+    // Measured: the object document of a table carries no content element
     // at all, so a `blue:content` body is accepted with 200 and **ignored** — the
     // table keeps its generated skeleton. `source/main` is the target that stores it.
     const ddl = "define table ztfoo {\n  key mandt : mandt not null;\n}\n";
@@ -297,6 +304,7 @@ describe("read-modify-write updates", () => {
       { status: 200, body: current }, // read current (inside the lock)
       { status: 200, body: "" }, // PUT
       { status: 200, body: "" }, // unlock
+      { status: 200, body: current }, // read back to confirm the properties landed
       { status: 200, body: "" }, // activation
       { status: 200, body: current }, // read back for verification
     ]);
@@ -304,7 +312,9 @@ describe("read-modify-write updates", () => {
 
     const result = (await registry.call(
       "UpdateDomain",
-      { domain_name: "ZD_X", length: "20", fixed_values: [{ low: "A", text: "Alpha" }] },
+      // `package_name` is required by the contract's own list — enforced now, so the fixture
+      // carries it like a real caller would.
+      { domain_name: "ZD_X", package_name: "$TMP", length: "20", fixed_values: [{ low: "A", text: "Alpha" }] },
       { system: "probe" },
     )) as { activated: boolean };
 
@@ -398,7 +408,7 @@ describe("read-modify-write updates", () => {
 
     const created = (await registry.call(
       "CreateInclude",
-      { include_name: "ZZ_INC_X", package_name: "$TMP", source_code: "* hello\n" },
+      { include_name: "ZMMR_MCP_LTPROG_I01", package_name: "$TMP", source_code: "* hello\n" },
       { system: "probe" },
     )) as { success: boolean };
 
@@ -409,7 +419,7 @@ describe("read-modify-write updates", () => {
     expect(post?.body ?? "").toContain("<include:abapInclude");
     expect(post?.body ?? "").toContain('adtcore:type="PROG/I"');
     const put = calls.find((call) => call.method === "PUT");
-    expect(put?.url).toContain("/programs/includes/zz_inc_x/source/main");
+    expect(put?.url).toContain("/programs/includes/zmmr_mcp_ltprog_i01/source/main");
   });
 });
 
@@ -606,6 +616,22 @@ describe("parent/child families", () => {
 });
 
 describe("write policy", () => {
+  it("refuses to create into a package the schema requires but the call omits", async () => {
+    // Measured on DS4/100: `CreateProgram {program_name}` answered
+    // `success: true` and created the object in `$TMP`, although the contract lists
+    // `package_name` under `required` — the silent default turned an intended
+    // transportable object into a local one.
+    const { impl, calls } = scriptedFetch([CSRF]);
+    const { registry } = build(impl);
+
+    await expect(
+      registry.call("CreateProgram", { program_name: "ZFOO" }, { system: "probe" }),
+    ).rejects.toMatchObject({ code: "INVALID_ARGUMENT", details: expect.objectContaining({ missing: "package_name" }) });
+
+    // Refused before the network: no CSRF fetch, no POST.
+    expect(calls).toHaveLength(0);
+  });
+
   it("refuses to write to a non-dev system before touching the network", async () => {
     const { impl, calls } = scriptedFetch([CSRF]);
     const { registry } = build(impl, "prd");
@@ -615,5 +641,232 @@ describe("write policy", () => {
     ).rejects.toMatchObject({ code: "SYSTEM_READ_ONLY" });
 
     expect(calls).toHaveLength(0);
+  });
+});
+
+/**
+ * `Validate*` answers "is this name free?", and it used to answer **yes** whenever the
+ * existence probe failed for any reason at all.
+ *
+ * Measured live: `ValidateClassLow {class_name: "ZCL_MCP_T01"}` on a class that
+ * existed answered `{exists: false, available: true}` — the class document refused the
+ * media type the probe asked for (406), and the refusal was read as absence.
+ */
+describe("validate honesty", () => {
+  const validate = (impl: typeof fetch) =>
+    build(impl).registry.call(
+      "ValidateClassLow",
+      { class_name: "ZCL_X", package_name: "$TMP", description: "d" },
+      { system: "probe" },
+    );
+
+  it("answers available when the object document answers 404", async () => {
+    // A plain GET needs no CSRF, so the first scripted step is the class document itself.
+    const { impl } = scriptedFetch([{ status: 404, body: "<exc:exception/>" }]);
+    await expect(validate(impl)).resolves.toMatchObject({ exists: false, available: true });
+  });
+
+  it("does not call a name free when the probe was refused for another reason", async () => {
+    // 406, then the `*/*` retry inside `requestAcceptingAny` answers 406 again.
+    const { impl } = scriptedFetch([{ status: 406, body: "<exc:exception/>" }]);
+    await expect(validate(impl)).rejects.toMatchObject({ code: "content-negotiation" });
+  });
+
+  it("reports an existing object as taken", async () => {
+    const { impl } = scriptedFetch([{ status: 200, body: "<class:abapClass/>" }]);
+    await expect(validate(impl)).resolves.toMatchObject({ exists: true, available: false });
+  });
+});
+
+describe("unlock honesty", () => {
+  /**
+ * Measured live: the program was locked, then `UnlockProgramLow` was called
+   * with an invented handle and answered `success: true` while the object kept its
+   * enqueue. SAP answers a plain 200 to an UNLOCK whose handle it does not know, so the
+   * only client-side evidence is the lock journal.
+   */
+  const locked = () =>
+    scriptedFetch([
+      CSRF,
+      { status: 200, body: "<DATA><LOCK_HANDLE>H1</LOCK_HANDLE></DATA>" }, // lock
+      { status: 200, body: "" }, // unlock
+    ]);
+
+  it("releases a handle it issued, without the unverified caveat", async () => {
+    const { impl, calls } = locked();
+    const { registry } = build(impl);
+
+    const lock = (await registry.call("LockProgramLow", { program_name: "ZFOO" }, { system: "probe" })) as {
+      lock_handle: string;
+    };
+    const unlock = (await registry.call(
+      "UnlockProgramLow",
+      { program_name: "ZFOO", lock_handle: lock.lock_handle, session_id: "s1" },
+      { system: "probe" },
+    )) as { success: boolean; release_unverified: boolean };
+
+    expect(unlock.success).toBe(true);
+    expect(unlock.release_unverified).toBe(false);
+    expect(calls.at(-1)?.url).toContain("_action=UNLOCK");
+  });
+
+  it("refuses a handle no lock of this logon is holding", async () => {
+    const { impl, calls } = locked();
+    const { registry } = build(impl);
+
+    await registry.call("LockProgramLow", { program_name: "ZFOO" }, { system: "probe" });
+    const before = calls.length;
+
+    await expect(
+      registry.call(
+        "UnlockProgramLow",
+        { program_name: "ZFOO", lock_handle: "DEADBEEF00000000000000000000000000000000", session_id: "s1" },
+        { system: "probe" },
+      ),
+    ).rejects.toMatchObject({ code: "INVALID_ARGUMENT", details: expect.objectContaining({ lock_handle: expect.any(String) }) });
+
+    // Refused before SAP was asked: an UNLOCK would have answered 200 and released nothing.
+    expect(calls.length).toBe(before);
+  });
+});
+
+/**
+ * A package write answers no handle when it had to re-lock in a new session.
+ *
+ * Measured live: `LockPackageLow` → `UpdatePackageLow` → `UnlockPackageLow` ended in
+ * `INVALID_ARGUMENT: No lock of this gateway is open under that handle` — the update had already
+ * released its fresh lock and closed the session that held it, but still answered the old handle
+ * as `lock_handle`, so the caller chained an unlock on something that no longer existed.
+ */
+describe("package write that re-locks in a new session", () => {
+  const PACKAGE_XML =
+    '<?xml version="1.0" encoding="utf-8"?><pak:package xmlns:pak="http://www.sap.com/adt/packages" ' +
+    'xmlns:adtcore="http://www.sap.com/adt/core" adtcore:name="ZMCPPKG" adtcore:type="DEVC/K" ' +
+    'adtcore:version="active" adtcore:description="old text"/>';
+
+  it("answers lock_released with no handle instead of a dead one", async () => {
+    // The request order is measured, not guessed (probe ): patch read → discovery →
+    // PUT (refused) → logoff → discovery → LOCK → PUT → UNLOCK.
+    const { impl, calls } = scriptedFetch([
+      { status: 200, body: PACKAGE_XML }, // read the active package for the patch
+      CSRF, // CSRF for the first write
+      { status: 403, body: "<message>Package ZMCPPKG is locked by user U</message>" },
+      { status: 200, body: "" }, // logoff: the retry runs in a new session
+      CSRF, // …and that session fetches its own token
+      { status: 200, body: "<DATA><LOCK_HANDLE>F1</LOCK_HANDLE></DATA>" }, // fresh lock
+      { status: 200, body: "" }, // the write
+      { status: 200, body: "" }, // that lock is released again
+    ]);
+    const { registry } = build(impl);
+
+    const answer = (await registry.call(
+      "UpdatePackageLow",
+      {
+        package_name: "ZMCPPKG",
+        super_package: "ZMCP_RAP",
+        updated_description: "new text",
+        lock_handle: "OLD1",
+      },
+      { system: "probe" },
+    )) as { lock_handle: string | null; lock_released: boolean; retried_in_new_session: boolean };
+
+    expect(answer.retried_in_new_session).toBe(true);
+    expect(answer.lock_released).toBe(true);
+    // Nothing survives to unlock: a handle here is what made `UnlockPackageLow` refuse itself.
+    expect(answer.lock_handle).toBeNull();
+    expect(calls.some((call) => call.url.includes("_action=UNLOCK"))).toBe(true);
+  });
+});
+
+/**
+ * `CreateStructure` declares `fields` as **required** and used to ignore it.
+ *
+ * Measured live: the object came back as SAP's skeleton
+ * (`define structure … { component_to_be_changed : abap.string(0); }`) while the caller had sent
+ * three fields — the array reached nothing at all.
+ */
+describe("CreateStructure writes its fields", () => {
+  it("puts the declared fields into the DDL", async () => {
+    const { impl, calls } = scriptedFetch([
+      CSRF,
+      { status: 201, body: "" }, // POST /ddic/structures
+      { status: 200, body: "<DATA><LOCK_HANDLE>H1</LOCK_HANDLE></DATA>" }, // lock
+      { status: 200, body: "" }, // PUT source/main
+      { status: 200, body: "" }, // unlock
+      { status: 200, body: "" }, // activation
+    ]);
+    const { registry } = build(impl);
+
+    await registry.call(
+      "CreateStructure",
+      {
+        structure_name: "ZST_MCP_T01",
+        package_name: "$TMP",
+        description: "probe",
+        fields: [
+          { name: "ID", data_type: "CHAR", length: 10 },
+          { name: "NAME", data_type: "CHAR", length: 40 },
+          { name: "AMOUNT", data_type: "DEC", length: 15, decimals: 2 },
+        ],
+      },
+      { system: "probe" },
+    );
+
+    const put = calls.find((call) => call.method === "PUT");
+    expect(put?.url).toContain("/ddic/structures/zst_mcp_t01/source/main");
+    expect(put?.body).toContain("define structure zst_mcp_t01 {");
+    expect(put?.body).toContain("id : abap.char(10);");
+    expect(put?.body).toContain("amount : abap.dec(15,2);");
+    expect(put?.body).not.toContain("component_to_be_changed");
+  });
+
+  it("refuses `includes` rather than dropping them", async () => {
+    const { impl } = scriptedFetch([CSRF, { status: 201, body: "" }]);
+    const { registry } = build(impl);
+    await expect(
+      registry.call(
+        "CreateStructure",
+        {
+          structure_name: "ZST_MCP_T02",
+          package_name: "$TMP",
+          fields: [{ name: "ID", data_type: "CHAR", length: 10 }],
+          includes: [{ name: "ZST_OTHER" }],
+        },
+        { system: "probe" },
+      ),
+    ).rejects.toMatchObject({ code: "NOT_IMPLEMENTED" });
+  });
+});
+
+describe("Check without a payload", () => {
+  it("checks the stored version instead of refusing the family's own argument", async () => {
+    const { impl } = scriptedFetch([
+      { status: 200, body: "<class:abapClass/>" }, // object document (existence probe, plain GET: no CSRF)
+      CSRF, // discovery for the checkrun POST
+      { status: 200, body: "<chkrun:checkMessages xmlns:chkrun=\"http://www.sap.com/adt/checkrun\"/>" }, // checkrun: an empty report
+    ]);
+    const { registry } = build(impl);
+
+    await expect(
+      registry.call("CheckCdsViewLow", { view_name: "ZV_MCP_T01" }, { system: "probe" }),
+    ).resolves.toMatchObject({ success: true, errors: 0 });
+  });
+});
+
+describe("activation reads the draft, and only a missing draft is 'no draft'", () => {
+  it("stops on a draft read that failed instead of activating the active version", async () => {
+    // A 403 on the inactive read used to be swallowed: the handler fell back to the *active*
+    // source, activated that, and answered `activated: true` — the one thing the caller did not
+    // ask for. The fallback must apply to `not-found` only.
+    const { impl, calls } = scriptedFetch([{ status: 403, body: "Service denied" }]);
+    const { registry } = build(impl);
+
+    await expect(
+      registry.call("ActivateProgramLow", { program_name: "ZMMR_MCP_LTPROG" }, { system: "probe" }),
+    ).rejects.toMatchObject({ status: 403 });
+
+    // Nothing beyond the draft read may have been requested: no active read, no activation.
+    expect(calls.filter((call) => call.method === "POST")).toEqual([]);
+    expect(calls.some((call) => call.url.includes("version=active"))).toBe(false);
   });
 });

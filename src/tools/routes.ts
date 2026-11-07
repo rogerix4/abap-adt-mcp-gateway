@@ -17,7 +17,9 @@ import { GatewayError } from "../engine/errors.js";
 import { AdtError } from "../adt/errors.js";
 import { lockHandleFromBody } from "../adt/session.js";
 import { RfcBridge } from "../adt/rfc.js";
+import { attributeOf, decodeXmlEntities, findElements, messageTextOf, nodeTextOf, parseXml, rootNameOf } from "../adt/xml.js";
 import { BRIDGE_TOOL_NAMES } from "./bridges.js";
+import { parseUnitResult, parseUnitStatus } from "./unit-result.js";
 import { legacyUnitTestBody, modernUnitTestBody } from "./unit-test.js";
 
 type Args = Record<string, unknown>;
@@ -117,7 +119,7 @@ const JSON_XML = "application/xml";
 const TEXT = "text/plain";
 const ATOM_FEED = "application/atom+xml;type=feed";
 const TEXT_ELEMENTS = "application/vnd.sap.adt.textelements.v1+xml";
-// Measured 2026-11-04: a multi-type Accept, or one carrying `dataname=`, makes the
+// Measured: a multi-type Accept, or one carrying `dataname=`, makes the
 // nodestructure resource answer 200 with an **empty body**. A single bare media type
 // returns the as-xml tree. Do not "improve" this by adding fallbacks.
 const NODE_STRUCTURE_ACCEPT = "application/vnd.sap.as+xml";
@@ -170,7 +172,7 @@ const UNIT_TEST_RESULT: Route = {
 };
 // This stack only serves v3; asking for v1 alone is refused with
 // "Accepted content types: application/vnd.sap.adt.enhancements.v3+xml".
-const ENHANCEMENTS_ACCEPT = "application/vnd.sap.adt.enhancements.v3+xml, application/vnd.sap.adt.enhancements.v1+xml, application/xml";
+// The list lives in `read.ts` now (`GetEnhancements` parses the document there).
 const TRACE_CALLTREE_ACCEPT = "application/vnd.sap.adt.runtime.traces.abaptraces.aggcalltree+xml, application/xml";
 /** Trace ids are `<server>,<timestamp>`; the comma must travel percent-encoded. */
 const TRACE_ID: readonly string[] = ["trace_id_or_uri"];
@@ -422,7 +424,7 @@ const arg = (args: Args, name: string): string | undefined => {
 };
 
 /** Builds the ADT resource URI for an object name/type pair. */
-function objectUri(args: Args, [nameArg, typeArg]: readonly [string, string]): string {
+export function objectUri(args: Args, [nameArg, typeArg]: readonly [string, string]): string {
   const name = arg(args, nameArg);
   const type = arg(args, typeArg) ?? arg(args, "objecttype") ?? arg(args, "object_type");
   if (name === undefined || type === undefined) {
@@ -465,7 +467,7 @@ const CASE_SENSITIVE = new Set([
   "validation_path",
   // ADT type codes in a query are case-sensitive on this stack: `parent_type=devc%2Fk`
   // answers 200 with an **empty** tree, `DEVC%2FK` answers with the nodes
-  // (measured 2026-11-04).
+  // (measured ).
   "parent_type",
   "objecttype",
   "object_type",
@@ -503,7 +505,7 @@ function fillBody(body: string, args: Args): string {
   return body.replace(/\{(\w+)\}/g, (_match, name: string) =>
     // `{node_id}` is the root node key in every tree request; without a value the body
     // carries `<TV_NODEKEY></TV_NODEKEY>` and SAP answers 200 with an empty tree
-    // (measured 2026-11-04: the whole nodestructure family looked "broken").
+    // (measured: the whole nodestructure family looked "broken").
     escapeXml(arg(args, name) ?? PLACEHOLDER_DEFAULTS[name] ?? ""),
   );
 }
@@ -512,10 +514,12 @@ const ROUTES: Readonly<Record<string, Route>> = {
   // ---- dumps, traces, profiler -------------------------------------------
   // `RuntimeListDumps` is implemented in `read.ts`: the schema exposes `top` / `skip` /
   // `orderby` / `user` / `include_summary`, which a fixed `$top={max_results}` route ignored.
-  RuntimeGetDumpById: { path: "/runtime/dump/{dump_id}/formatted", accept: TEXT, text: true },
-  // `RuntimeAnalyzeDump` is implemented in `read.ts`: facts / chapters / summary need the
-  // structured dump resource, not the flat `/formatted` text.
-  RuntimeListProfilerTraceFiles: { path: "/runtime/traces/abaptraces", accept: ATOM_FEED },
+  // `RuntimeGetDumpById` / `RuntimeAnalyzeDump` / `HandlerDumpView` are implemented in
+  // `read.ts`: their `view` / `response_mode` / `chapters` arguments need the structured
+  // dump resource, which a fixed `/formatted` route could not honour (it answered the full
+  // long text — 166 KB measured — for every mode).
+  // `RuntimeListProfilerTraceFiles` is implemented in `profiler.ts`: the feed is 564 KB of XML
+  // and its description promises a parsed payload, so the route would only flood the caller.
   RuntimeListFeeds: { path: "/feeds", accept: ATOM_FEED },
   RuntimeListSystemMessages: { path: "/runtime/systemmessages", accept: ATOM_FEED },
   RuntimeGetGatewayErrorLog: { path: "/gw/errorlog", accept: ATOM_FEED },
@@ -525,9 +529,8 @@ const ROUTES: Readonly<Record<string, Route>> = {
   // `references[]` / `snippets[]`, and `object_identifiers` actually used).
 
   // ---- program composition ----------------------------------------------
-  // Covers a program's own source; the includes are assembled by the caller, which is
-  // why `type` decides the family (`PROG/P` or `FUGR`).
-  GetProgFullCode: { path: "{resource}/source/main", accept: TEXT, text: true, resourceFrom: "type" },
+  // `GetProgFullCode` is implemented in `read.ts`: it assembles the program **and its
+  // includes** (the tree, then `D010INC`), which a single `source/main` route cannot do.
   GetIncludesList: {
     method: "POST",
     path: "/repository/nodestructure?parent_type={object_type}&parent_name={object_name}&parent_tech_name={object_name}&withShortDescriptions=true&node_id=000000",
@@ -618,7 +621,8 @@ const ROUTES: Readonly<Record<string, Route>> = {
     contentType: NODE_STRUCTURE_CT,
     body: NODE_STRUCTURE_BODY,
   },
-  GetAdtTypes: { path: "/discovery", accept: "application/atomsvc+xml" },
+  // `GetAdtTypes` is implemented in `read.ts`: the discovery document is a 400 KB service
+  // catalogue, and `validate_type` is a real search call that SAP validates.
   // `GetAbapSystemSymbols`, `GetAbapAST` and `GetAbapSemanticAnalysis` are computed from the
   // ABAP source text with a real parser in `src/tools/abap-analysis.ts` — ADT has no AST
   // endpoint, and a route can only fill one path anyway.
@@ -653,15 +657,9 @@ const ROUTES: Readonly<Record<string, Route>> = {
   GetCdsUnitTestResult: UNIT_TEST_RESULT,
 
   // ---- enhancements, services, smartforms --------------------------------
-  GetEnhancements: {
-    path: "{object_path}/source/main/enhancements/elements",
-    accept: ENHANCEMENTS_ACCEPT,
-    uriFrom: ["object_name", "object_type"],
-  },
-  GetEnhancementSpot: {
-    path: "/enhancements/enhsxsb/{enhancement_spot}",
-    accept: "application/vnd.sap.adt.enh.enhs.v2+xml",
-  },
+  // `GetEnhancements` and `GetEnhancementSpot` are implemented in `read.ts`: the first decodes the
+  // base64 `<enh:source>` of every implementation, the second parses the spot document (package,
+  // tool type, usages, BAdI definitions) instead of handing over the XML.
   // `{spot}` is the enhancement type (`enhoxhh` for a source-code plugin) or a spot
   // name; only source-code plugins carry `source/main`.
   GetEnhancementImpl: {
@@ -670,8 +668,9 @@ const ROUTES: Readonly<Record<string, Route>> = {
   },
   // Implemented by `read.ts` from the classic BAdI tables (SXC_EXIT / SXS_ATTR +
   // TADIR): the ECC bridge this used to need does not exist on this stack.
-  ListServiceBindingTypes: { path: "/businessservices/bindings/bindingtypes", accept: JSON_XML },
-  HandlerServiceBindingListTypes: { path: "/businessservices/bindings/bindingtypes", accept: JSON_XML },
+  // `ListServiceBindingTypes` / `HandlerServiceBindingListTypes` are implemented in
+  // `read.ts`: `response_format` needs the parsed named-item list, which a fixed route
+  // could not produce.
   // SmartForm content / layout / create / delete / render live in `src/tools/smartforms.ts`:
   // they need the ZMCP_SSF_* bridge, which is a call plus XML work, not a route.
 };
@@ -775,7 +774,11 @@ function lowVariants(): Record<string, Route> {
     path: "/oo/classes/{class_name}/includes/testclasses?lockHandle={lock_handle}",
     accept: TEXT,
     contentType: TEXT,
-    bodyFrom: "test_class_code",
+    // The contract spells the body `test_class_source` (measured live: with
+    // `bodyFrom: "test_class_code"` the PUT carried an empty body and SAP answered
+    // `Not found: Resource CLASS_INCLUDE ZCL_MCP_T01 does not exist`, which says nothing
+    // about the argument that was actually missing).
+    bodyFrom: "test_class_source",
   };
   generated["CreateTransportLow"] = {
     method: "POST",
@@ -832,7 +835,8 @@ function lowVariants(): Record<string, Route> {
   generated["HandlerActivate"] = { method: "POST", path: "/activation?method=activate&preauditRequested=false", accept: JSON_XML, contentType: "application/vnd.sap.adt.activation+xml", bodyFrom: "body" };
   generated["HandlerCheckRun"] = { method: "POST", path: "/checkruns?reporters=abapCheckRun", accept: "application/vnd.sap.adt.checkmessages+xml", contentType: "application/vnd.sap.adt.checkobjects+xml", bodyFrom: "body" };
   generated["HandlerDumpList"] = { path: "/runtime/dumps?$top={max_results}", accept: ATOM_FEED };
-  generated["HandlerDumpView"] = { path: "/runtime/dump/{dump_id}/formatted", accept: TEXT, text: true };
+  // `HandlerDumpView` is implemented in `read.ts`: its `view` argument selects the structured
+  // resource, which this fixed `/formatted` route ignored.
   generated["HandlerProfileList"] = { path: "/runtime/traces/abaptraces", accept: ATOM_FEED };
   generated["HandlerProfileRun"] = { method: "POST", path: "/runtime/traces/abaptraces/requests", accept: JSON_XML, contentType: JSON_XML, bodyFrom: "body" };
   generated["HandlerProfileView"] = {
@@ -906,21 +910,12 @@ function lowVariants(): Record<string, Route> {
   generated["WriteTextElementsBulk"] = { method: "PUT", path: "/textelements/programs/{program_name}", accept: TEXT_ELEMENTS, contentType: TEXT_ELEMENTS, bodyFrom: "text_elements" };
 
   // Read-only analysis.
-  // Measured 2026-11-04: the query parameter is `ddicEntityName`, not `tableName` —
+  // Measured: the query parameter is `ddicEntityName`, not `tableName` —
   // with `tableName` SAP answers 400 "Parameter ddicEntityName could not be found".
   generated["GetTableContents"] = { method: "POST", path: "/datapreview/ddic?rowNumber={max_rows}&ddicEntityName={table_name}", accept: "application/vnd.sap.adt.datapreview.table.v1+xml", contentType: "text/plain" };
   generated["GetPackageContents"] = { method: "POST", path: "/repository/nodestructure?parent_type=DEVC%2FK&parent_name={package_name}&parent_tech_name={package_name}&withShortDescriptions=true&node_id=000000", accept: NODE_STRUCTURE_ACCEPT, contentType: NODE_STRUCTURE_CT, body: NODE_STRUCTURE_BODY };
-  generated["GetObjectStructureLow"] = {
-    method: "POST",
-    path:
-      // The contract spells the arguments `object_type` / `object_name`; the old row asked
-      // for `{objecttype}` / `{objectname}` and the tool answered `Missing "objecttype"`.
-      "/repository/nodestructure?parent_type={object_type}&parent_name={object_name}" +
-      "&parent_tech_name={object_name}&withShortDescriptions=true&node_id=000000",
-    accept: NODE_STRUCTURE_ACCEPT,
-    contentType: NODE_STRUCTURE_CT,
-    body: NODE_STRUCTURE_BODY,
-  };
+  // `GetObjectStructureLow` is implemented in `read.ts`: the root node answers only the category
+  // list, so the tool expands each category itself instead of returning an empty tree.
   generated["GetObjectNodeFromCache"] = {
     method: "POST",
     path: "/repository/nodestructure?parent_type={object_type}&parent_name={object_name}&parent_tech_name={tech_name}&withShortDescriptions=true&node_id=000000",
@@ -956,8 +951,10 @@ function lowVariants(): Record<string, Route> {
  * Without it the hit list and the analysis could not be reached at all.
  */
 export function traceIdOf(body: string): string {
-  const id = /<atom:id>([^<]+)<\/atom:id>/i.exec(body)?.[1];
-  if (id === undefined) return "";
+  const parsed = parseXml(body);
+  const node = parsed === undefined ? undefined : findElements(parsed, "id")[0];
+  const id = node === undefined ? "" : nodeTextOf(node);
+  if (id.length === 0) return "";
   const tail = id.split("/").filter((part) => part.length > 0).pop() ?? "";
   try {
     return decodeURIComponent(tail);
@@ -1020,7 +1017,7 @@ export function activationBody(args: Args, tool = "ActivateObjects"): string {
  * SAP's "the object is locked / currently being edited" answer.
  *
  * Not a bad request: the enqueue belongs to the session that ran the previous step, so the
- * same request in a fresh session is accepted. Measured 2026-11-04 after an RFC screen
+ * same request in a fresh session is accepted. Measured after an RFC screen
  * delete and after every package write.
  */
 function isLockConflict(error: unknown): boolean {
@@ -1034,14 +1031,13 @@ function isLockConflict(error: unknown): boolean {
  * Fills `dynpro_data` for a screen write.
  *
  * The contract advertises it as optional, but the dispatcher's `DYNPRO_INSERT` refuses an
- * empty one (`DYNPRO_DATA is required`). Measured 2026-11-04 on a report program, three
+ * empty one (`DYNPRO_DATA is required`). Measured on a report program, three
  * payloads: a minimal header alone answered `RPY_DYNPRO_INSERT sy-subrc=8`, and so did the
  * header plus the `SCREEN` container; the same document **with the two PROCESS blocks in
  * its flow logic** inserted cleanly (`subrc=0`). Header component names come from a real
  * `DYNPRO_READ` answer (`SAPLKKBL/0500`) — they are `PROGRAM`/`SCREEN`, not `DYNPRO`/`DYNNR`.
  */
-function screenDefaults(args: Args): Args {
-  const writing = args["description"] !== undefined || args["lock_handle"] !== undefined;
+function screenDefaults(args: Args, writing: boolean): Args {
   if (args["screen_number"] === undefined || args["dynpro_data"] !== undefined || !writing) return args;
   const program = String(args["program_name"] ?? "").toUpperCase();
   const dynpro = String(args["screen_number"] ?? "").padStart(4, "0");
@@ -1066,8 +1062,21 @@ function screenDefaults(args: Args): Args {
   };
 }
 
+/**
+ * The route table as it will be registered.
+ *
+ * Exported so a test can check every `{placeholder}` and every `bodyFrom` against the
+ * contract's own argument list — measured live: `UpdateClassTestClassesLow`
+ * read its body from `test_class_code` while the contract calls that argument
+ * `test_class_source`, so the PUT went out empty and SAP answered a confusing
+ * "Resource CLASS_INCLUDE … does not exist".
+ */
+export function routeTable(): Readonly<Record<string, Route>> {
+  return { ...ROUTES, ...lowVariants() };
+}
+
 export function registerTableToolRoutes(registry: ToolRegistry, runtime: GatewayRuntime): void {
-  const routes: Record<string, Route> = { ...ROUTES, ...lowVariants() };
+  const routes: Record<string, Route> = { ...routeTable() };
   // Only the rows the contract knows become handlers, and nothing the bridge
   // module already implemented — registering twice is a programming error.
   const owns = (tool: string): boolean =>
@@ -1077,7 +1086,11 @@ export function registerTableToolRoutes(registry: ToolRegistry, runtime: Gateway
   /** Any verb that is not a plain GET changes the system. */
   const routeWrites = (route: Route): boolean =>
     (route.method ?? "GET") !== "GET" ||
-    (route.rfc ?? []).some((step) => /^(create|update|delete|patch|activate|set|reset)/i.test(step.action));
+    // `insert`/`delete` are the dispatcher's own names for the dynpro and CUA writes, so a
+    // `DYNPRO_INSERT` route used to count as a read: no default payload was filled in, and a
+    // read-only tier accepted it. The verb sits behind the resource name (`DYNPRO_INSERT`,
+    // `CUA_WRITE`), so the suffix counts as well as the prefix.
+    (route.rfc ?? []).some((step) => /(^|_)(create|update|delete|patch|activate|set|reset|insert|add|remove|write|lock|unlock)$/i.test(step.action));
   for (const [tool, route] of Object.entries(routes)) {
     if (!owns(tool)) continue;
     // Skip anything a family or the read-only module already owns.
@@ -1088,15 +1101,16 @@ export function registerTableToolRoutes(registry: ToolRegistry, runtime: Gateway
       // The tier boundary is decided here, not by the name of the tool: a route whose
       // method writes must be treated as a write, or a read-only system accepts it.
       const resolved = runtime.resolve(ctx.system, arg(args, "session_id"), routeWrites(route));
+      const writes = routeWrites(route);
       const effective =
         route.validationFrom !== undefined
           ? { ...args, validation_path: validationPath(args, route.validationFrom) }
           : route.uriFrom === undefined
-          ? screenDefaults(args)
+          ? screenDefaults(args, writes)
           : (() => {
               const uri = arg(args, "object_uri") ?? objectUri(args, route.uriFrom);
               return {
-                ...screenDefaults(args),
+                ...screenDefaults(args, writes),
                 object_uri: uri,
                 object_uri_encoded: encodeURIComponent(uri),
                 object_path: uri.replace(/^\/sap\/bc\/adt/, ""),
@@ -1122,16 +1136,32 @@ export function registerTableToolRoutes(registry: ToolRegistry, runtime: Gateway
           for (const [paramName, argName] of Object.entries(step.params)) {
             // `effective`, not `args`: screen writes get their `dynpro_data` default there.
             const value = arg(effective, argName);
-            if (value !== undefined) params[paramName] = value;
+            if (value === undefined) continue;
+            // The dispatcher takes the payload as text; a caller that read a screen or a CUA gets
+            // an object back now, so it is serialised here instead of asking every caller to do it.
+            params[paramName] = typeof value === "object" && value !== null ? JSON.stringify(value) : value;
           }
           last = await bridge.dispatch(step.action, params);
           steps.push({ action: step.action, subrc: last.subrc, message: last.message });
+        }
+        // The dispatcher returns its payload as an XML-escaped JSON string (`&#34;HEADER&#34;…`),
+        // which a caller cannot use: read it back as an object. Measured — ReadScreen
+        // answered `&#34;HEADER&#34;:…`, and feeding that to UpdateScreen failed with subrc=5.
+        let result = last.result;
+        if (typeof result === "string") {
+          const decoded = decodeXmlEntities(result);
+          try {
+            const parsed: unknown = JSON.parse(decoded);
+            result = parsed;
+          } catch {
+            result = decoded;
+          }
         }
         return {
           success: true,
           transport: "rfc",
           steps,
-          result: last.result,
+          result,
           session_id: resolved.sessionId,
         };
       }
@@ -1169,9 +1199,9 @@ export function registerTableToolRoutes(registry: ToolRegistry, runtime: Gateway
         response = await send({ path, accept, ...(route.contentType === undefined ? {} : { contentType: route.contentType }), ...(body === undefined ? {} : { body }) });
       } catch (error: unknown) {
         // A lock conflict is a session-owned enqueue, not a bad request: measured
-        // 2026-11-04, an RFC screen delete leaves the program enqueued to the session that
+        //, an RFC screen delete leaves the program enqueued to the session that
         // ran it, so the next activation answers "The object is locked: … currently
-        // editing ZMMR9061". One retry in a fresh session clears it.
+        // editing ZDEMO_REPORT". One retry in a fresh session clears it.
         if (isLockConflict(error) && routeWrites(route)) {
           await runtime.closeAll();
           const retry = runtime.resolve(ctx.system, arg(args, "session_id"), true);
@@ -1184,6 +1214,12 @@ export function registerTableToolRoutes(registry: ToolRegistry, runtime: Gateway
             timeoutMs: 120_000,
           });
         } else if (route.fallback === undefined || !endpointMissing(error)) {
+          // The ADT layer already classified the answer (`not-found`, `already-exists`,
+          // `invalid-lock`, `content-negotiation`, …). Wrapping it in `UPSTREAM_FAILED` threw that
+          // away: measured, `GetEnhancementSpot` on a name that does not exist answered
+          // `UPSTREAM_FAILED` for a plain 404, so a caller branching on `not-found` missed it. Only
+          // an unclassified failure is the gateway giving up on SAP.
+          if (error instanceof AdtError) throw error;
           throw new GatewayError("UPSTREAM_FAILED", `${tool} failed: ${String((error as Error).message ?? error)}`, {
             path,
             nextAction: "check the route in src/tools/routes.ts against the system's discovery document",
@@ -1203,6 +1239,7 @@ export function registerTableToolRoutes(registry: ToolRegistry, runtime: Gateway
             if (route.absentBecause !== undefined && endpointMissing(retryError)) {
               throw new GatewayError("NOT_IMPLEMENTED", route.absentBecause, { path: answeredPath });
             }
+            if (retryError instanceof AdtError) throw retryError;
             throw new GatewayError("UPSTREAM_FAILED", `${tool} failed: ${String((retryError as Error).message ?? retryError)}`, {
               path: answeredPath,
               nextAction:
@@ -1215,8 +1252,15 @@ export function registerTableToolRoutes(registry: ToolRegistry, runtime: Gateway
       const lockHandle = lockHandleFromBody(String(response.body ?? ""));
       const answerBody = String(response.body ?? "");
       const checklist = parseChecklist(answerBody);
+      // A unit-test **result** answers its own document; `success` has to come from it, not
+      // from the HTTP status (measured live: a failing test answered
+      // `success: true` and buried `severity="critical"` in `raw_xml`).
+      const unitResult = route === UNIT_TEST_RESULT ? parseUnitResult(answerBody) : undefined;
+      // The status document says whether the run is still going; `percentage` and
+      // `FINISHED` were already in the body and invisible to a caller reading fields.
+      const unitStatus = route === UNIT_TEST_STATUS ? parseUnitStatus(answerBody) : undefined;
       // A 201 with an empty body still carries its identity in `Location` — measured
-      // 2026-11-04 on `/abapunit/runs`, where the caller had no run id and every
+      // on `/abapunit/runs`, where the caller had no run id and every
       // Status/Result call was unusable.
       const location = String(response.headers["location"] ?? "");
       const runId = /\/abapunit\/runs\//i.test(location)
@@ -1229,13 +1273,15 @@ export function registerTableToolRoutes(registry: ToolRegistry, runtime: Gateway
         ? traceIdOf(answerBody)
         : "";
       return {
-        // A checklist answer is a report, not a success: measured 2026-11-04,
+        // A checklist answer is a report, not a success: measured,
         // `ActivateScreenLow` answered HTTP 200 with `activationExecuted="false"` and
         // was returned as `success: true`.
-        success: checklist === undefined ? true : checklist.errors === 0,
+        success: unitResult !== undefined ? unitResult.success : (checklist === undefined ? true : checklist.errors === 0),
         path: answeredPath,
         status: response.status,
         ...(checklist === undefined ? {} : checklist),
+        ...(unitResult === undefined ? {} : { unit_result: unitResult }),
+        ...(unitStatus === undefined ? {} : { unit_status: unitStatus }),
         ...(location.length === 0 ? {} : { location }),
         ...(runId.length === 0 ? {} : { run_id: runId }),
         ...(traceId.length === 0 ? {} : { trace_id: traceId }),
@@ -1253,20 +1299,28 @@ export function registerTableToolRoutes(registry: ToolRegistry, runtime: Gateway
  * Two attribute spellings carry the severity (`severity="error"` and `type="E"`), and
  * the `<chkl:properties>` element says what actually happened; a caller that only
  * looks at the HTTP status sees "200" for a cancelled activation.
+ *
+ * Read structurally, through the same helpers as `lifecycle.activate`: the message text
+ * nests one level deeper than the check report (`<msg><shortText><txt>`), and a regex
+ * over markup lost it there once already.
  */
-function parseChecklist(
+export function parseChecklist(
   body: string,
 ): { readonly activation_executed: boolean; readonly generation_executed: boolean; readonly errors: number; readonly warnings: number; readonly messages: readonly { severity: string; text: string }[] } | undefined {
-  if (!/<chkl:messages/i.test(body) && !/<msg\b/i.test(body)) return undefined;
-  const messages = [...body.matchAll(/<msg\b([^>]*)>([\s\S]*?)<\/msg>/gi)].map((match) => {
-    const attrs = match[1] ?? "";
-    const inner = match[2] ?? "";
-    const severity = (/severity="([^"]*)"/i.exec(attrs)?.[1] ?? /type="([^"]*)"/i.exec(attrs)?.[1] ?? "").toLowerCase();
-    const text = (/<txt>([\s\S]*?)<\/txt>/i.exec(inner)?.[1] ?? "").replace(/<[^>]+>/g, "").trim();
-    return { severity, text };
-  });
+  const parsed = parseXml(body);
+  if (parsed === undefined) return undefined;
+  const root = rootNameOf(parsed) ?? "";
+  const nodes = findElements(parsed, "msg");
+  if (root !== "messages" && root !== "msg" && nodes.length === 0) return undefined;
+
+  const messages = nodes.map((msg) => ({
+    severity: (attributeOf(msg, "severity") ?? attributeOf(msg, "type") ?? "").toLowerCase(),
+    text: messageTextOf(msg),
+  }));
   const isError = (severity: string): boolean => severity === "e" || severity === "a" || severity === "error";
-  const flag = (name: string): boolean => new RegExp(`${name}="true"`, "i").test(body);
+  const properties = findElements(parsed, "properties")[0];
+  const flag = (name: string): boolean =>
+    properties !== undefined && (attributeOf(properties, name) ?? "").toLowerCase() === "true";
   return {
     activation_executed: flag("activationExecuted"),
     generation_executed: flag("generationExecuted"),

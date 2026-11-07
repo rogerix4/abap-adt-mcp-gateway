@@ -8,10 +8,10 @@
  * Handing those nine errors to the caller sends it off to change working code.
  */
 
-import { mkdtempSync } from "node:fs";
+
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { beforeEach, describe, expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
 
 import { runCheck } from "../src/adt/lifecycle.js";
 import { AdtSession } from "../src/adt/session.js";
@@ -19,7 +19,7 @@ import { AdtSession } from "../src/adt/session.js";
 process.env["ABAP_ADT_MCP_LOCK_JOURNAL"] = join(tmpdir(), `locks-check-${process.pid}.json`);
 
 const message = (text: string, severity = "E"): string =>
-  `<chkrun:message chkrun:type="${severity}" chkrun:uri="/sap/bc/adt/programs/programs/zz_probe">` +
+  `<chkrun:message chkrun:type="${severity}" chkrun:uri="/sap/bc/adt/programs/programs/zmmr_mcp_probe">` +
   `<chkrun:shortText>${text}</chkrun:shortText></chkrun:message>`;
 
 const answer = (...messages: string[]): string =>
@@ -30,7 +30,7 @@ const answer = (...messages: string[]): string =>
 function sessionAnswering(...bodies: string[]): { session: AdtSession; checks: number[] } {
   const checks: number[] = [];
   let index = 0;
-  const fetchImpl = (async (input: RequestInfo | URL) => {
+  const fetchImpl = (async (input: string | URL | Request) => {
     const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
     if (url.includes("/discovery")) {
       return new Response("<ok/>", { status: 200, headers: { "x-csrf-token": "token" } });
@@ -53,7 +53,7 @@ function sessionAnswering(...bodies: string[]): { session: AdtSession; checks: n
   };
 }
 
-const URI = "/sap/bc/adt/programs/programs/zz_probe";
+const URI = "/sap/bc/adt/programs/programs/zmmr_mcp_probe";
 
 describe("the check answer", () => {
   it("is retried once after a reset when it is the stale-session shape", async () => {
@@ -77,7 +77,7 @@ describe("the check answer", () => {
 
   it("is retried once when several errors carry identical text", async () => {
     const { session, checks } = sessionAnswering(
-      answer(message("Field \"<FS>\" is unknown"), message('Field "<FS>" is unknown'), answer()),
+      answer(message('Field "&lt;FS&gt;" is unknown'), message('Field "&lt;FS&gt;" is unknown'), answer()),
       answer(),
     );
 
@@ -110,7 +110,7 @@ describe("the check answer", () => {
 
   it("falls back to the active version when the inactive version is empty", async () => {
     const checkBodies: string[] = [];
-    const fetchImpl = (async (input: RequestInfo | URL) => {
+    const fetchImpl = (async (input: string | URL | Request) => {
       const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
       if (url.includes("/discovery")) {
         return new Response("<ok/>", { status: 200, headers: { "x-csrf-token": "token" } });
@@ -119,7 +119,7 @@ describe("the check answer", () => {
         return new Response("", { status: 200, headers: { "x-csrf-token": "token" } });
       }
       if (url.includes("/source/main?version=active")) {
-        return new Response("REPORT zz_probe.\n", {
+        return new Response("REPORT zmmr_mcp_probe.\n", {
           status: 200,
           headers: { "x-csrf-token": "token", "content-type": "text/plain" },
         });
@@ -148,7 +148,7 @@ describe("the check answer", () => {
   });
 
   it("is read when SAP spells the message as a self-closing checkMessage", async () => {
-    // Measured 2026-11-04 on a CDS view: the reporter answers
+    // Measured on a CDS view: the reporter answers
     // `<chkrun:checkMessage chkrun:type="E" chkrun:shortText="…" …/>` — a different
     // element name with the text in an attribute. The parser demanded
     // `<chkrun:message>` with an inner `<chkrun:shortText>` and saw nothing, so a view

@@ -15,7 +15,9 @@ export type GatewayErrorCode =
   | "SYSTEM_UNKNOWN"
   | "SYSTEM_READ_ONLY"
   | "UPSTREAM_FAILED"
-  | "CONFIG_INVALID";
+  | "CONFIG_INVALID"
+  /** The payload did not match what the caller declared (sha256 / line count / patch match count). Nothing was written. */
+  | "CONTENT_MISMATCH";
 
 export class GatewayError extends Error {
   readonly code: GatewayErrorCode;

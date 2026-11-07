@@ -20,7 +20,7 @@ export interface CreateContext {
   /**
    * Logon user, for documents that demand a responsible person.
    *
-   * Measured 2026-11-04: creating a package without `adtcore:responsible` answers
+ * Measured: creating a package without `adtcore:responsible` answers
    * "enter a valid user (instead of blanks) as the person responsible".
    */
   readonly responsible?: string;
@@ -169,7 +169,7 @@ export interface ObjectFamily {
    * hold — success is "activation reported no errors and the object reads back
    * non-empty".
    */
-  readonly verification?: "content" | "readable" | "normalized";
+  readonly verification?: "content" | "readable" | "normalized" | "tokens";
   /**
    * Work that must happen before a high-level delete.
    *
@@ -259,7 +259,7 @@ export function assertCustomerName(name: string): void {
 }
 
 /**
- * A container may be a local package (`$TMP`) — measured 2026-11-04: creating a package
+ * A container may be a local package (`$TMP`) — measured: creating a package
  * *below* `$TMP` was refused as "not a customer object name", although a local child
  * package is exactly what `$TMP` is for. Any other system namespace stays off-limits.
  */

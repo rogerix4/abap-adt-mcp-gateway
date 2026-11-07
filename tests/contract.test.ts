@@ -147,7 +147,7 @@ describe("MCP surface", () => {
 
     for (const tool of tools) {
       expect(tool.inputSchema.type).toBe("object");
-      expect(tool.description.length).toBeGreaterThan(0);
+      expect((tool.description ?? "").length).toBeGreaterThan(0);
       expect(tool.annotations).toBeDefined();
     }
   });
@@ -222,6 +222,21 @@ describe("write serialization", () => {
     const order: string[] = [];
 
     /**
+     * Required arguments filled with placeholders.
+     *
+     * These tests are about the write queue, not about argument validation — and the
+     * registry rejects a call that leaves `required` empty (`CreateProgram: missing
+     * "package_name"`), which would otherwise make every case fail for the wrong reason.
+     */
+    const argsFor = (entry: typeof writeTool) => {
+      const out: Record<string, unknown> = {};
+      for (const key of entry.definition.inputSchema.required ?? []) {
+        out[key] = key === "session_state" ? {} : "ZPLACEHOLDER";
+      }
+      return out;
+    };
+
+    /**
      * Records `label:system:start` / `label:system:end`, so a test can tell a queue that
      * is per system from one that is global.
      */
@@ -235,7 +250,6 @@ describe("write serialization", () => {
 
     registry.register(writeTool.definition.name, slow("write"));
     registry.register(readTool.definition.name, slow("read"));
-
     const server = createGatewayServer({
       registry,
       info: { name: packageJson.name, version: VERSION, systems },
@@ -246,26 +260,27 @@ describe("write serialization", () => {
     const client = new Client({ name: "contract-test", version: "0.0.0" });
     await server.connect(serverTransport);
     await client.connect(clientTransport);
-    return { client, order, writeTool, readTool };
+    return { client, order, writeTool, readTool, argsFor };
   };
 
   it("never lets two writes to one system overlap", async () => {
-    const { client, order, writeTool } = await harness();
-    const call = () => client.callTool({ name: writeTool.definition.name, arguments: { system: "a" } });
+    const { client, order, writeTool, argsFor } = await harness();
+    const call = () => client.callTool({ name: writeTool.definition.name, arguments: { ...argsFor(writeTool), system: "a" } });
     await Promise.all([call(), call()]);
     expect(order).toEqual(["write:a:start", "write:a:end", "write:a:start", "write:a:end"]);
   });
 
   it("lets reads overlap", async () => {
-    const { client, order, readTool } = await harness();
-    const call = () => client.callTool({ name: readTool.definition.name, arguments: { system: "a" } });
+    const { client, order, readTool, argsFor } = await harness();
+    const call = () => client.callTool({ name: readTool.definition.name, arguments: { ...argsFor(readTool), system: "a" } });
     await Promise.all([call(), call()]);
     expect(order).toEqual(["read:a:start", "read:a:start", "read:a:end", "read:a:end"]);
   });
 
   it("lets writes to different systems run at the same time", async () => {
-    const { client, order, writeTool } = await harness(["a", "b"]);
-    const call = (system: string) => client.callTool({ name: writeTool.definition.name, arguments: { system } });
+    const { client, order, writeTool, argsFor } = await harness(["a", "b"]);
+    const call = (system: string) =>
+      client.callTool({ name: writeTool.definition.name, arguments: { ...argsFor(writeTool), system } });
     await Promise.all([call("a"), call("b")]);
     // Both started before either finished: the second write was not queued behind the first.
     expect(order.slice(0, 2).sort()).toEqual(["write:a:start", "write:b:start"]);
@@ -273,8 +288,9 @@ describe("write serialization", () => {
   });
 
   it("queues per system, not globally", async () => {
-    const { client, order, writeTool } = await harness(["a", "b"]);
-    const call = (system: string) => client.callTool({ name: writeTool.definition.name, arguments: { system } });
+    const { client, order, writeTool, argsFor } = await harness(["a", "b"]);
+    const call = (system: string) =>
+      client.callTool({ name: writeTool.definition.name, arguments: { ...argsFor(writeTool), system } });
     await Promise.all([call("a"), call("a"), call("b")]);
     const firstAEnd = order.indexOf("write:a:end");
     const secondAStart = order.indexOf("write:a:start", order.indexOf("write:a:start") + 1);
@@ -286,6 +302,12 @@ describe("write serialization", () => {
 });
 
 describe("ADT errors reach the client classified", () => {
+  /** Placeholders for whatever the contract calls required — this case is about the error. */
+  const argsForTool = (entry: { definition: { inputSchema: { required?: readonly string[] } } }) => {
+    const out: Record<string, unknown> = {};
+    for (const key of entry.definition.inputSchema.required ?? []) out[key] = key === "session_state" ? {} : "ZPLACEHOLDER";
+    return out;
+  };
   it("keeps the ADT code and next action instead of reporting INTERNAL_ERROR", async () => {
     const registry = createRegistry();
     const tool = registry.list()[0]!;
@@ -310,7 +332,7 @@ describe("ADT errors reach the client classified", () => {
     await server.connect(serverTransport);
     await client.connect(clientTransport);
 
-    const result = await client.callTool({ name: tool.definition.name, arguments: {} });
+    const result = await client.callTool({ name: tool.definition.name, arguments: argsForTool(tool) });
     await clientTransport.close();
 
     const text = (result.content as Array<{ type: string; text?: string }>)[0]?.text ?? "";

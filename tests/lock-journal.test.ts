@@ -19,7 +19,7 @@ import { AdtSession } from "../src/adt/session.js";
 const LOCK_BODY = (handle: string): string =>
   '<asx:abap><asx:values><DATA><LOCK_HANDLE>' +
   handle +
-  "</LOCK_HANDLE><CORRNR>DS4K900001</CORRNR><IS_LOCAL>X</IS_LOCAL></DATA></asx:values></asx:abap>";
+  "</LOCK_HANDLE><CORRNR>DEVK900001</CORRNR><IS_LOCAL>X</IS_LOCAL></DATA></asx:values></asx:abap>";
 
 interface Recorded {
   readonly method: string;
@@ -34,7 +34,7 @@ function scriptedSession(
   process.env["ABAP_ADT_MCP_LOCK_JOURNAL"] = journalFile;
   const requests: Recorded[] = [];
   let issued = 0;
-  const fetchImpl = (async (input: RequestInfo | URL, init?: RequestInit) => {
+  const fetchImpl = (async (input: string | URL | Request, init?: RequestInit) => {
     const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
     const method = init?.method ?? "GET";
     requests.push({ method, url });
@@ -135,13 +135,13 @@ describe("locking", () => {
  * that misses them leaves locks nobody can give back.
  */
 describe("locks taken outside the lock helper", () => {
-  const objectUrl = "https://sap.example.com:44300/sap/bc/adt/programs/programs/zz_probe";
+  const objectUrl = "https://sap.example.com:44300/sap/bc/adt/programs/programs/zmmr_mcp_probe";
 
   it("journals a LOCK sent as a plain request", async () => {
     const { session } = scriptedSession(journalFile);
     await session.request({
       method: "POST",
-      path: "/programs/programs/zz_probe?_action=LOCK&accessMode=MODIFY",
+      path: "/programs/programs/zmmr_mcp_probe?_action=LOCK&accessMode=MODIFY",
       accept: "*/*",
     });
 
@@ -152,13 +152,13 @@ describe("locks taken outside the lock helper", () => {
     const { session, requests } = scriptedSession(journalFile);
     await session.request({
       method: "POST",
-      path: "/programs/programs/zz_probe?_action=LOCK&accessMode=MODIFY",
+      path: "/programs/programs/zmmr_mcp_probe?_action=LOCK&accessMode=MODIFY",
       accept: "*/*",
     });
     const before = requests.length;
     await session.request({
       method: "POST",
-      path: "/programs/programs/zz_probe?_action=LOCK&accessMode=MODIFY",
+      path: "/programs/programs/zmmr_mcp_probe?_action=LOCK&accessMode=MODIFY",
       accept: "*/*",
     });
 
@@ -173,26 +173,26 @@ describe("locks taken outside the lock helper", () => {
     const { session } = scriptedSession(journalFile);
     await session.request({
       method: "POST",
-      path: "/programs/programs/zz_probe?_action=LOCK&accessMode=MODIFY",
+      path: "/programs/programs/zmmr_mcp_probe?_action=LOCK&accessMode=MODIFY",
       accept: "*/*",
     });
     await session.request({
       method: "POST",
-      path: "/programs/programs/zz_probe?_action=UNLOCK&lockHandle=HANDLE10000",
+      path: "/programs/programs/zmmr_mcp_probe?_action=UNLOCK&lockHandle=HANDLE10000",
       accept: "*/*",
     });
     expect(new LockJournal(journalFile).read()).toEqual({});
 
     await session.request({
       method: "POST",
-      path: "/programs/programs/zz_probe?_action=LOCK&accessMode=MODIFY",
+      path: "/programs/programs/zmmr_mcp_probe?_action=LOCK&accessMode=MODIFY",
       accept: "*/*",
     });
     const second = new LockJournal(journalFile).handleFor(objectUrl);
     expect(second).toBeDefined();
     await session.request({
       method: "DELETE",
-      path: `/programs/programs/zz_probe?lockHandle=${second as string}`,
+      path: `/programs/programs/zmmr_mcp_probe?lockHandle=${second as string}`,
       accept: "*/*",
     });
     // Measured on the reference system: the DELETE removes the object but leaves the name-level
@@ -203,7 +203,7 @@ describe("locks taken outside the lock helper", () => {
     // The explicit UNLOCK after the delete is what clears it.
     await session.request({
       method: "POST",
-      path: `/programs/programs/zz_probe?_action=UNLOCK&lockHandle=${second as string}`,
+      path: `/programs/programs/zmmr_mcp_probe?_action=UNLOCK&lockHandle=${second as string}`,
       accept: "*/*",
     });
     expect(new LockJournal(journalFile).read()).toEqual({});
@@ -214,7 +214,7 @@ describe("locks taken outside the lock helper", () => {
     await expect(
       session.request({
         method: "POST",
-        path: "/programs/programs/zz_probe?_action=LOCK&accessMode=MODIFY",
+        path: "/programs/programs/zmmr_mcp_probe?_action=LOCK&accessMode=MODIFY",
         accept: "*/*",
       }),
     ).rejects.toMatchObject({ code: "locked" });
@@ -225,7 +225,7 @@ describe("locks taken outside the lock helper", () => {
     const lockFile = join(mkdtempSync(join(tmpdir(), "delete-lock-")), "locks.json");
     process.env["ABAP_ADT_MCP_LOCK_JOURNAL"] = lockFile;
     const urls: { method: string; url: string }[] = [];
-    const fetchImpl = (async (input: RequestInfo | URL, init?: RequestInit) => {
+    const fetchImpl = (async (input: string | URL | Request, init?: RequestInit) => {
       const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
       const method = init?.method ?? "GET";
       urls.push({ method, url });
@@ -250,7 +250,7 @@ describe("locks taken outside the lock helper", () => {
       fetchImpl,
     });
 
-    const result = await deleteObject(session, "/programs/programs/zz_probe");
+    const result = await deleteObject(session, "/programs/programs/zmmr_mcp_probe");
 
     expect(result.deleted).toBe(false);
     expect(urls.some((entry) => entry.url.includes("_action=UNLOCK&lockHandle=HANDLE9"))).toBe(true);

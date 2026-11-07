@@ -7,11 +7,20 @@
  * means "still locked", a 500 that means "nothing to check".
  */
 
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+
 import { describe, expect, it } from "vitest";
 
 import { AdtError } from "../src/adt/errors.ts";
+import { classifyResponse, networkError, sapMessageOf } from "../src/adt/errors.ts";
+import { assertObjectExists } from "../src/adt/lifecycle.ts";
 import { activate, compareSource, deleteObject, lockObject, runCheck, writeSource } from "../src/adt/lifecycle.ts";
 import { AdtSession } from "../src/adt/session.ts";
+
+// This file locks; a journal shared with the other offline files makes a LOCK release a
+// stale entry first, which shifts every scripted response by one.
+process.env["ABAP_ADT_MCP_LOCK_JOURNAL"] = join(tmpdir(), `locks-adt-${process.pid}.json`);
 
 interface Recorded {
   readonly url: string;
@@ -164,11 +173,11 @@ describe("lifecycle", () => {
       CSRF,
       {
         status: 200,
-        body: '<asx:abap><asx:values><DATA><LOCK_HANDLE>H1</LOCK_HANDLE><CORRNR>S4HK900001</CORRNR><IS_LOCAL> </IS_LOCAL></DATA></asx:values></asx:abap>',
+        body: '<asx:abap><asx:values><DATA><LOCK_HANDLE>H1</LOCK_HANDLE><CORRNR>DEVK900001</CORRNR><IS_LOCAL> </IS_LOCAL></DATA></asx:values></asx:abap>',
       },
     ]);
     const lock = await lockObject(adt, "/programs/programs/zfoo");
-    expect(lock).toEqual({ lockHandle: "H1", corrNr: "S4HK900001", isLocal: false });
+    expect(lock).toEqual({ lockHandle: "H1", corrNr: "DEVK900001", isLocal: false });
   });
 
   it("throws when the lock answered without a handle", async () => {
@@ -180,11 +189,11 @@ describe("lifecycle", () => {
     const { adt, calls } = session([CSRF, { status: 200, body: "" }]);
     await writeSource(adt, "/programs/programs/zfoo/source/main", "REPORT zfoo.", {
       lockHandle: "H1",
-      corrNr: "S4HK900001",
+      corrNr: "DEVK900001",
     });
     expect(calls[1]?.method).toBe("PUT");
     expect(calls[1]?.url).toContain("lockHandle=H1");
-    expect(calls[1]?.url).toContain("corrNr=S4HK900001");
+    expect(calls[1]?.url).toContain("corrNr=DEVK900001");
     expect(calls[1]?.headers["content-type"]).toBe("text/plain; charset=utf-8");
   });
 
@@ -242,15 +251,87 @@ describe("lifecycle", () => {
       { status: 200, body: "" }, // deletion request
       { status: 404, body: "<message>not found</message>" }, // read back: gone
     ]);
-    const result = await deleteObject(adt, "/businessservices/bindings/zsvc", "S4HK900001");
+    const result = await deleteObject(adt, "/businessservices/bindings/zsvc", "DEVK900001");
 
     expect(result.deleted).toBe(true);
     expect(result.status).toBe(200);
     const deletion = calls.find((call) => call.method === "POST" && call.url.endsWith("/deletion/delete"));
     expect(deletion).toBeDefined();
     expect(deletion?.body).toContain("/sap/bc/adt/businessservices/bindings/zsvc");
-    expect(deletion?.body).toContain("S4HK900001");
+    expect(deletion?.body).toContain("DEVK900001");
     expect(deletion?.headers["content-type"]).toBe("application/vnd.sap.adt.deletion.request.v1+xml");
+  });
+});
+
+describe("unrecognised answers are not success", () => {
+  it("an activation body without <msg> is not 'activated'", async () => {
+    const { adt } = session([CSRF, { status: 200, body: "<html><body>Service unavailable</body></html>" }]);
+    const report = await activate(adt, [
+      { uri: "/sap/bc/adt/programs/programs/zfoo", name: "ZFOO", adtType: "PROG/P" },
+    ]);
+
+    expect(report.ok).toBe(false);
+    expect(report.unrecognized).toContain("cannot read");
+    expect(report.unrecognized).toContain("root <html>");
+    expect(report.status).toContain("cannot read");
+  });
+
+  it("treats the platform's empty <chkl:messages> report as success", async () => {
+    // Captured live on: a successful activation answers this document, not an
+    // empty body. `generationExecuted=true` is not proof of activation — the read-back in
+    // `activateAndVerify` is — but it is a shape the parser must recognise.
+    const body =
+      '<?xml version="1.0" encoding="utf-8"?><chkl:messages xmlns:chkl="http://www.sap.com/abapxml/checklist">' +
+      '<chkl:properties checkExecuted="false" activationExecuted="false" generationExecuted="true"/></chkl:messages>';
+    const { adt } = session([CSRF, { status: 200, body }]);
+    const report = await activate(adt, [{ uri: "/sap/bc/adt/programs/programs/zfoo", name: "ZFOO" }]);
+
+    expect(report.ok).toBe(true);
+    expect(report.unrecognized).toBeUndefined();
+  });
+
+  it("reads the message text from a nested shortText/txt", async () => {
+    // Captured live: the activation report nests the text one level deeper
+    // than the check report does.
+    const body =
+      '<?xml version="1.0" encoding="utf-8"?><chkl:messages xmlns:chkl="http://www.sap.com/abapxml/checklist">' +
+      '<msg objDescr="program ZFOO" type="E" line="1" forceSupported="true">' +
+      '<shortText><txt>Statement "THIS" is not defined.</txt></shortText></msg></chkl:messages>';
+    const { adt } = session([CSRF, { status: 200, body }]);
+    const report = await activate(adt, [{ uri: "/sap/bc/adt/programs/programs/zfoo", name: "ZFOO" }]);
+
+    expect(report.ok).toBe(false);
+    expect(report.errors).toBe(1);
+    expect(report.status).toContain('Statement "THIS" is not defined.');
+  });
+
+  it("decodes an entity SAP escaped once in the activation text", async () => {
+    const { adt } = session([
+      CSRF,
+      {
+        status: 200,
+        body: '<msg type="E"><txt>Unable to interpret "LO_WORKSHEET-&gt;SET_CELL("</txt></msg>',
+      },
+    ]);
+    const report = await activate(adt, [{ uri: "/sap/bc/adt/programs/programs/zfoo", name: "ZFOO" }]);
+
+    expect(report.ok).toBe(false);
+    expect(report.status).toContain("LO_WORKSHEET->SET_CELL(");
+    expect(report.status).not.toContain("&gt;");
+  });
+
+  it("a check body with no chkrun vocabulary throws instead of reporting 0 errors", async () => {
+    const { adt } = session([CSRF, { status: 200, body: "{\"d\":{\"results\":[]}}" }]);
+    await expect(runCheck(adt, "/sap/bc/adt/programs/programs/zfoo", "active")).rejects.toMatchObject({
+      code: "unrecognized-response",
+    });
+  });
+
+  it("an empty check document is still a clean check", async () => {
+    const { adt } = session([CSRF, { status: 200, body: '<chkrun:checkMessages xmlns:chkrun="x"/>' }]);
+    const result = await runCheck(adt, "/sap/bc/adt/programs/programs/zfoo", "active");
+    expect(result.errors).toBe(0);
+    expect(result.unavailable).toBeUndefined();
   });
 });
 
@@ -265,5 +346,135 @@ describe("source comparison", () => {
     const result = compareSource("line1\nline2\n", "line1\nother\n");
     expect(result.equal).toBe(false);
     expect(result.detail).toContain("line 2");
+  });
+
+  it("ignores line breaks and keyword case in token mode", () => {
+    // A function module comes back with its signature split onto its own line and keywords in
+    // upper case; how far SAP re-lays-out the text depends on the system's editor setup, so no
+    // fixed formatting can be assumed. The token stream is what has to match.
+    const wrote = "FUNCTION zfm_mcp_ltfunc\n  IMPORTING VALUE(iv) TYPE i\n  EXPORTING VALUE(ev) TYPE i.\n  ev = iv.\nENDFUNCTION.";
+    const active = "FUNCTION ZFM_MCP_LTFUNC\r\n  IMPORTING\r\n    VALUE(IV) TYPE I\r\n  EXPORTING\r\n    VALUE(EV) TYPE I.\r\n  EV = IV.\r\nENDFUNCTION.";
+    expect(compareSource(wrote, active, { tokens: true }).equal).toBe(true);
+  });
+
+  it("still catches a changed literal in token mode", () => {
+    const wrote = "FUNCTION z\n  ev = 'one'.\nENDFUNCTION.";
+    const active = "FUNCTION z\n  ev = 'two'.\nENDFUNCTION.";
+    const result = compareSource(wrote, active, { tokens: true });
+    expect(result.equal).toBe(false);
+    expect(result.detail).toContain("token streams differ");
+  });
+
+  it("ignores the formatting SAP imposes on a DDL source", () => {
+    // the live system lines the colons up on save; the write and the activation both succeeded and
+    // the answer still said `activated: false` with a mismatch on the aligned line.
+    const wrote =
+      "define table zzt {\n\n  key client : abap.clnt not null;\n  key id : abap.int4 not null;\n  name : abap.char(20);\n\n}\n";
+    const active =
+      "define table zzt {\n\n  key client : abap.clnt not null;\n  key id     : abap.int4 not null;\n  name       : abap.char(20);\n\n}\n";
+
+    expect(compareSource(wrote, active, { loose: true }).equal).toBe(true);
+    expect(compareSource(wrote.toUpperCase().replace("ZZT", "zzt"), active, { loose: true }).equal).toBe(true);
+  });
+
+  it("still reports a real difference in a loose comparison", () => {
+    const wrote = "define table zzt {\n  key id : abap.int4 not null;\n}\n";
+    const active = "define table zzt {\n  key id : abap.char(10) not null;\n}\n";
+    expect(compareSource(wrote, active, { loose: true }).equal).toBe(false);
+    expect(compareSource(wrote + "\n", wrote, { loose: true }).equal).toBe(true);
+  });
+
+  it("keeps a literal case-sensitive in a loose comparison", () => {
+    const wrote = "@EndUserText.label : 'my Label'\ndefine table zzt {\n  key id : abap.int4 not null;\n}\n";
+    const active = "@EndUserText.label : 'my label'\ndefine table zzt {\n  key id : abap.int4 not null;\n}\n";
+    expect(compareSource(wrote, active, { loose: true }).equal).toBe(false);
+  });
+});
+
+describe("assertObjectExists", () => {
+  const session = (answer: () => Promise<unknown>): never =>
+    ({ requestAcceptingAny: answer }) as unknown as never;
+
+  it("answers not-found before the source of a deleted object is read", async () => {
+    // Measured: reading `source/main` of a deleted interface made SAP write a short
+    // dump (CX_OO_CLIF_NOT_EXISTS). The document GET answers 404 and is what the check uses.
+    const fake = session(async () => {
+      throw new AdtError({ code: "not-found", message: "gone", nextAction: "", status: 404 });
+    });
+    await expect(assertObjectExists(fake, "/oo/interfaces/zmmr_mcp_gone/source/main")).rejects.toMatchObject({
+      code: "not-found",
+      message: "No such object: /oo/interfaces/zmmr_mcp_gone",
+    });
+  });
+
+  it("lets any other answer through, so a media-type quirk is not a missing object", async () => {
+    const fake = session(async () => {
+      throw new AdtError({ code: "content-negotiation", message: "406", nextAction: "", status: 406 });
+    });
+    await expect(assertObjectExists(fake, "/oo/interfaces/zmmr_mcp_here/source/main")).resolves.toBeUndefined();
+    const ok = session(async () => ({ status: 200, body: "<x/>" }));
+    await expect(assertObjectExists(ok, "/oo/interfaces/zmmr_mcp_here/source/main")).resolves.toBeUndefined();
+  });
+});
+
+describe("classifyResponse on a duplicate create", () => {
+  // Measured live: `CreateProgram ZMMR_MCP_T01` a second time answered **500** with
+  // `已存在名为 ZMMR_MCP_T01 的程序或 include`. Classified as `upstream`, the caller reads it as a
+  // server fault; the honest answer is "the name is taken, use Update* instead".
+  const error = classifyResponse({
+    status: 500,
+    method: "POST",
+    path: "/programs/programs",
+    body: '<exc:exception xmlns:exc="http://www.sap.com/adt/exceptions"><exc:message>已存在名为 ZMMR_MCP_T01 的程序或 include</exc:message></exc:exception>',
+  });
+
+  it("answers already-exists, not upstream", () => {
+    expect(error?.code).toBe("already-exists");
+  });
+
+  it("says what to do instead of naming a server problem", () => {
+    expect(error?.nextAction).toContain("Update*");
+  });
+
+  it("keeps a genuine 500 as upstream", () => {
+    expect(
+      classifyResponse({ status: 500, method: "POST", path: "/x", body: "Access using a 'ZERO' object reference" })?.code,
+    ).toBe("upstream");
+  });
+});
+
+describe("sapMessageOf", () => {
+  it("keeps an escaped `<` in an exception text", () => {
+    // The text is the sentence the caller reads; an escaped angle bracket is common in
+    // SAP wording (`Field <FS> is unknown`) and used to be sliced by the tag regex.
+    const body =
+      '<exc:exception xmlns:exc="http://www.sap.com/abapxml/types/communicationframework">' +
+      "<exc:type>CX_ADT_REST</exc:type>" +
+      "<message>Field &lt;FS&gt; is unknown</message>" +
+      "</exc:exception>";
+
+    expect(sapMessageOf(body)).toBe("Field <FS> is unknown");
+  });
+
+  it("falls back to localizedMessage and then to the raw text", () => {
+    expect(sapMessageOf("<exc:exception><localizedMessage>Objekt </localizedMessage></exc:exception>")).toBe("Objekt");
+    expect(sapMessageOf("plain text")).toBe("plain text");
+    expect(sapMessageOf("   ")).toBeUndefined();
+  });
+});
+
+describe("networkError", () => {
+  it("keeps the reason Node hid inside `cause`", () => {
+    // Measured: `CreateClass` answered `fetch failed` while the endpoint was up.
+    const outer = new TypeError("fetch failed");
+    (outer as { cause?: unknown }).cause = Object.assign(new Error("other side closed"), { code: "UND_ERR_SOCKET" });
+    const error = networkError("POST", "/oo/classes", outer);
+    expect(error.code).toBe("network");
+    expect(error.message).toContain("fetch failed");
+    expect(error.message).toContain("UND_ERR_SOCKET");
+  });
+
+  it("still works when there is no cause chain", () => {
+    expect(networkError("GET", "/x", "boom").message).toBe("Cannot reach the system: boom");
   });
 });

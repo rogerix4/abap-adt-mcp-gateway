@@ -10,8 +10,7 @@
 import type { ToolRegistry } from "../engine/registry.js";
 import type { GatewayRuntime } from "../runtime.js";
 import { registerFamily } from "./handlers.js";
-import { textFamilies, xmlFamilies } from "./descriptors.js";
-import { programFamily } from "./program.js";
+import { allFamilies, assertUniqueFamilyIds } from "./registry.js";
 import { registerReadTools } from "../tools/read.js";
 import { registerHandlerTools } from "../tools/handler-dispatch.js";
 import { registerTableToolRoutes } from "../tools/routes.js";
@@ -21,9 +20,10 @@ import { registerAbapAnalysisTools } from "../tools/abap-analysis.js";
 import type { ObjectFamily } from "./types.js";
 
 /** Families whose descriptors are complete and measured. */
-export const implementedFamilies: readonly ObjectFamily[] = [programFamily, ...textFamilies, ...xmlFamilies];
+export const implementedFamilies: readonly ObjectFamily[] = allFamilies;
 
 export function registerFamilies(registry: ToolRegistry, runtime: GatewayRuntime): void {
+  assertUniqueFamilyIds(implementedFamilies);
   for (const family of implementedFamilies) {
     registerFamily({ registry, runtime, family });
   }

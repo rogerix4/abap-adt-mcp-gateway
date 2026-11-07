@@ -1286,7 +1286,7 @@
           },
           "transport_request": {
             "type": "string",
-            "description": "Transport request number (e.g., E19K905635). Required."
+            "description": "Transport request number (e.g., DEVK905123). Required."
           },
           "root_entity": {
             "type": "string",
@@ -2152,7 +2152,7 @@
           },
           "transport_request": {
             "type": "string",
-            "description": "Transport request number (e.g., S4HK904224). Required for transportable packages. Optional for local ($TMP) objects."
+            "description": "Transport request number (e.g., DEVK905123). Required for transportable packages. Optional for local ($TMP) objects."
           },
           "insert_into_main": {
             "type": "boolean",
@@ -2309,7 +2309,7 @@
           },
           "transport_request": {
             "type": "string",
-            "description": "Transport request number (e.g., E19K905635). Optional for local objects."
+            "description": "Transport request number (e.g., DEVK905123). Optional for local objects."
           },
           "master_language": {
             "type": "string",
@@ -3100,7 +3100,7 @@
           },
           "target_system": {
             "type": "string",
-            "description": "Target system for transport (optional, e.g., 'PRD', 'QAS'). If not provided or empty, uses 'LOCAL'"
+            "description": "Target system the request is released to (e.g. 'QS4'). Required: SAP stores it in E070-TARSYSTEM and a request without one cannot be imported into the landscape."
           },
           "owner": {
             "type": "string",
@@ -3108,7 +3108,8 @@
           }
         },
         "required": [
-          "description"
+          "description",
+          "target_system"
         ]
       }
     },
@@ -5899,7 +5900,7 @@
         "properties": {
           "transport_number": {
             "type": "string",
-            "description": "Transport request number (e.g., E19K905635, DEVK905123)"
+            "description": "Transport request number (e.g., DEVK905123)."
           },
           "owner": {
             "type": "string",
@@ -8724,7 +8725,7 @@
           },
           "values": {
             "type": "object",
-            "description": "Interface parameter → value, in internal format: structures as objects with the ABAP component names, TABLES parameters / table types as arrays, dates \"2026-10-16\", times \"14:00:00\", amounts and quantities as numbers. Parameters left out are passed initial."
+            "description": "Interface parameter → value, in internal format: structures as objects with the ABAP component names, TABLES parameters / table types as arrays, dates \"YYYY-MM-DD\", times \"14:00:00\", amounts and quantities as numbers. Parameters left out are passed initial."
           },
           "values_file": {
             "type": "string",
@@ -10151,7 +10152,7 @@
     },
     {
       "name": "UpdateBehaviorDefinition",
-      "description": "Update source code of an ABAP Behavior Definition (BDEF). Modifies RAP business object behavior: CRUD operations, validations, determinations, actions, and draft handling.",
+      "description": "Update source code of an ABAP Behavior Definition (BDEF). Modifies RAP business object behavior: CRUD operations, validations, determinations, actions, and draft handling. Alternatively pass source_file (local path, read server-side) or patch (old/new hunks applied to the active source).",
       "inputSchema": {
         "type": "object",
         "properties": {
@@ -10174,17 +10175,57 @@
           "activate": {
             "type": "boolean",
             "description": "Activate after update. Default: true"
+          },
+          "source_file": {
+            "type": "string",
+            "description": "Absolute path to a UTF-8 file read by the gateway. Alternative to source_code — pass exactly one of source_code / source_file. Use it for large sources instead of inlining 100 KB of escaped JSON."
+          },
+          "patch": {
+            "type": "array",
+            "description": "Server-side replacements applied to the ACTIVE source, so the unchanged lines never travel. Each hunk must match expected_count times (default 1) or nothing is written (CONTENT_MISMATCH).",
+            "items": {
+              "type": "object",
+              "properties": {
+                "old": {
+                  "type": "string",
+                  "description": "Exact text to find."
+                },
+                "new": {
+                  "type": "string",
+                  "description": "Replacement text."
+                },
+                "expected_count": {
+                  "type": "number",
+                  "description": "How many occurrences must exist. Default 1."
+                }
+              },
+              "required": [
+                "old",
+                "new"
+              ]
+            }
+          },
+          "expected_line_count": {
+            "type": "number",
+            "description": "Integrity check: abort with CONTENT_MISMATCH (nothing written) when the payload line count differs from this value."
+          },
+          "expected_sha256": {
+            "type": "string",
+            "description": "Integrity check: abort with CONTENT_MISMATCH (nothing written) when sha256(payload) differs from this hex digest."
+          },
+          "check_no_change": {
+            "type": "boolean",
+            "description": "Read the active version first and answer no_change=true (no lock, no write) when it already equals the payload. Default false: the write happens as before."
           }
         },
         "required": [
-          "name",
-          "source_code"
+          "name"
         ]
       }
     },
     {
       "name": "UpdateBehaviorDefinitionLow",
-      "description": "[low-level] Update source code of an existing ABAP behavior definition. Requires lock handle from LockObject. - use UpdateBehaviorDefinition (high-level) for full workflow with lock/unlock/activate.",
+      "description": "[low-level] Update source code of an existing ABAP behavior definition. Requires lock handle from LockObject. - use UpdateBehaviorDefinition (high-level) for full workflow with lock/unlock/activate. Alternatively pass source_file (local path, read server-side) or patch (old/new hunks applied to the active source).",
       "inputSchema": {
         "type": "object",
         "properties": {
@@ -10226,11 +10267,51 @@
                 "type": "object"
               }
             }
+          },
+          "source_file": {
+            "type": "string",
+            "description": "Absolute path to a UTF-8 file read by the gateway. Alternative to source_code — pass exactly one of source_code / source_file. Use it for large sources instead of inlining 100 KB of escaped JSON."
+          },
+          "patch": {
+            "type": "array",
+            "description": "Server-side replacements applied to the ACTIVE source, so the unchanged lines never travel. Each hunk must match expected_count times (default 1) or nothing is written (CONTENT_MISMATCH).",
+            "items": {
+              "type": "object",
+              "properties": {
+                "old": {
+                  "type": "string",
+                  "description": "Exact text to find."
+                },
+                "new": {
+                  "type": "string",
+                  "description": "Replacement text."
+                },
+                "expected_count": {
+                  "type": "number",
+                  "description": "How many occurrences must exist. Default 1."
+                }
+              },
+              "required": [
+                "old",
+                "new"
+              ]
+            }
+          },
+          "expected_line_count": {
+            "type": "number",
+            "description": "Integrity check: abort with CONTENT_MISMATCH (nothing written) when the payload line count differs from this value."
+          },
+          "expected_sha256": {
+            "type": "string",
+            "description": "Integrity check: abort with CONTENT_MISMATCH (nothing written) when sha256(payload) differs from this hex digest."
+          },
+          "check_no_change": {
+            "type": "boolean",
+            "description": "Read the active version first and answer no_change=true (no lock, no write) when it already equals the payload. Default false: the write happens as before."
           }
         },
         "required": [
           "name",
-          "source_code",
           "lock_handle"
         ]
       }
@@ -10296,7 +10377,7 @@
     },
     {
       "name": "UpdateClass",
-      "description": "Update source code of an existing ABAP class. Locks, checks, updates, unlocks, and optionally activates.",
+      "description": "Update source code of an existing ABAP class. Locks, checks, updates, unlocks, and optionally activates. Alternatively pass source_file (local path, read server-side) or patch (old/new hunks applied to the active source).",
       "inputSchema": {
         "type": "object",
         "properties": {
@@ -10315,17 +10396,57 @@
           "activate": {
             "type": "boolean",
             "description": "Activate after update. Default: false."
+          },
+          "source_file": {
+            "type": "string",
+            "description": "Absolute path to a UTF-8 file read by the gateway. Alternative to source_code — pass exactly one of source_code / source_file. Use it for large sources instead of inlining 100 KB of escaped JSON."
+          },
+          "patch": {
+            "type": "array",
+            "description": "Server-side replacements applied to the ACTIVE source, so the unchanged lines never travel. Each hunk must match expected_count times (default 1) or nothing is written (CONTENT_MISMATCH).",
+            "items": {
+              "type": "object",
+              "properties": {
+                "old": {
+                  "type": "string",
+                  "description": "Exact text to find."
+                },
+                "new": {
+                  "type": "string",
+                  "description": "Replacement text."
+                },
+                "expected_count": {
+                  "type": "number",
+                  "description": "How many occurrences must exist. Default 1."
+                }
+              },
+              "required": [
+                "old",
+                "new"
+              ]
+            }
+          },
+          "expected_line_count": {
+            "type": "number",
+            "description": "Integrity check: abort with CONTENT_MISMATCH (nothing written) when the payload line count differs from this value."
+          },
+          "expected_sha256": {
+            "type": "string",
+            "description": "Integrity check: abort with CONTENT_MISMATCH (nothing written) when sha256(payload) differs from this hex digest."
+          },
+          "check_no_change": {
+            "type": "boolean",
+            "description": "Read the active version first and answer no_change=true (no lock, no write) when it already equals the payload. Default false: the write happens as before."
           }
         },
         "required": [
-          "class_name",
-          "source_code"
+          "class_name"
         ]
       }
     },
     {
       "name": "UpdateClassLow",
-      "description": "[low-level] Update source code of an existing ABAP class. Uses session from HandlerContext. Requires lock handle from LockClass operation. - use UpdateClass (high-level) for full workflow with lock/unlock/activate.",
+      "description": "[low-level] Update source code of an existing ABAP class. Uses session from HandlerContext. Requires lock handle from LockClass operation. - use UpdateClass (high-level) for full workflow with lock/unlock/activate. Alternatively pass source_file (local path, read server-side) or patch (old/new hunks applied to the active source).",
       "inputSchema": {
         "type": "object",
         "properties": {
@@ -10344,11 +10465,51 @@
           "skip_check": {
             "type": "boolean",
             "description": "Skip pre-write syntax check on source_code. Default: false. When false, runs a syntax check on the proposed code BEFORE uploading it and surfaces any errors with line numbers — the broken source never lands on SAP."
+          },
+          "source_file": {
+            "type": "string",
+            "description": "Absolute path to a UTF-8 file read by the gateway. Alternative to source_code — pass exactly one of source_code / source_file. Use it for large sources instead of inlining 100 KB of escaped JSON."
+          },
+          "patch": {
+            "type": "array",
+            "description": "Server-side replacements applied to the ACTIVE source, so the unchanged lines never travel. Each hunk must match expected_count times (default 1) or nothing is written (CONTENT_MISMATCH).",
+            "items": {
+              "type": "object",
+              "properties": {
+                "old": {
+                  "type": "string",
+                  "description": "Exact text to find."
+                },
+                "new": {
+                  "type": "string",
+                  "description": "Replacement text."
+                },
+                "expected_count": {
+                  "type": "number",
+                  "description": "How many occurrences must exist. Default 1."
+                }
+              },
+              "required": [
+                "old",
+                "new"
+              ]
+            }
+          },
+          "expected_line_count": {
+            "type": "number",
+            "description": "Integrity check: abort with CONTENT_MISMATCH (nothing written) when the payload line count differs from this value."
+          },
+          "expected_sha256": {
+            "type": "string",
+            "description": "Integrity check: abort with CONTENT_MISMATCH (nothing written) when sha256(payload) differs from this hex digest."
+          },
+          "check_no_change": {
+            "type": "boolean",
+            "description": "Read the active version first and answer no_change=true (no lock, no write) when it already equals the payload. Default false: the write happens as before."
           }
         },
         "required": [
           "class_name",
-          "source_code",
           "lock_handle"
         ]
       }
@@ -10692,7 +10853,7 @@
     },
     {
       "name": "UpdateFunctionModule",
-      "description": "Update source code of an existing ABAP function module. Locks the function module, uploads new source code, and unlocks. Optionally activates after update. Use this to modify existing function modules without re-creating metadata.",
+      "description": "Update source code of an existing ABAP function module. Locks the function module, uploads new source code, and unlocks. Optionally activates after update. Use this to modify existing function modules without re-creating metadata. Alternatively pass source_file (local path, read server-side) or patch (old/new hunks applied to the active source).",
       "inputSchema": {
         "type": "object",
         "properties": {
@@ -10710,23 +10871,63 @@
           },
           "transport_request": {
             "type": "string",
-            "description": "Transport request number (e.g., E19K905635). Required for transportable function modules. For local objects ($TMP package) this can be omitted — the handler defaults to \"local\"."
+            "description": "Transport request number (e.g., DEVK905123). Required for transportable function modules. For local objects ($TMP package) this can be omitted — the handler defaults to \"local\"."
           },
           "activate": {
             "type": "boolean",
             "description": "Activate function module after source update. Default: false. Set to true to activate immediately."
+          },
+          "source_file": {
+            "type": "string",
+            "description": "Absolute path to a UTF-8 file read by the gateway. Alternative to source_code — pass exactly one of source_code / source_file. Use it for large sources instead of inlining 100 KB of escaped JSON."
+          },
+          "patch": {
+            "type": "array",
+            "description": "Server-side replacements applied to the ACTIVE source, so the unchanged lines never travel. Each hunk must match expected_count times (default 1) or nothing is written (CONTENT_MISMATCH).",
+            "items": {
+              "type": "object",
+              "properties": {
+                "old": {
+                  "type": "string",
+                  "description": "Exact text to find."
+                },
+                "new": {
+                  "type": "string",
+                  "description": "Replacement text."
+                },
+                "expected_count": {
+                  "type": "number",
+                  "description": "How many occurrences must exist. Default 1."
+                }
+              },
+              "required": [
+                "old",
+                "new"
+              ]
+            }
+          },
+          "expected_line_count": {
+            "type": "number",
+            "description": "Integrity check: abort with CONTENT_MISMATCH (nothing written) when the payload line count differs from this value."
+          },
+          "expected_sha256": {
+            "type": "string",
+            "description": "Integrity check: abort with CONTENT_MISMATCH (nothing written) when sha256(payload) differs from this hex digest."
+          },
+          "check_no_change": {
+            "type": "boolean",
+            "description": "Read the active version first and answer no_change=true (no lock, no write) when it already equals the payload. Default false: the write happens as before."
           }
         },
         "required": [
           "function_group_name",
-          "function_module_name",
-          "source_code"
+          "function_module_name"
         ]
       }
     },
     {
       "name": "UpdateFunctionModuleLow",
-      "description": "[low-level] Update source code of an existing ABAP function module. Requires lock handle from LockObject and function group name. - use UpdateFunctionModule (high-level) for full workflow with lock/unlock/activate.",
+      "description": "[low-level] Update source code of an existing ABAP function module. Requires lock handle from LockObject and function group name. - use UpdateFunctionModule (high-level) for full workflow with lock/unlock/activate. Alternatively pass source_file (local path, read server-side) or patch (old/new hunks applied to the active source).",
       "inputSchema": {
         "type": "object",
         "properties": {
@@ -10744,7 +10945,7 @@
           },
           "transport_request": {
             "type": "string",
-            "description": "Transport request number (e.g., E19K905635). Required for transportable objects locked in a request."
+            "description": "Transport request number (e.g., DEVK905123). Required for transportable objects locked in a request."
           },
           "lock_handle": {
             "type": "string",
@@ -10772,12 +10973,52 @@
                 "type": "object"
               }
             }
+          },
+          "source_file": {
+            "type": "string",
+            "description": "Absolute path to a UTF-8 file read by the gateway. Alternative to source_code — pass exactly one of source_code / source_file. Use it for large sources instead of inlining 100 KB of escaped JSON."
+          },
+          "patch": {
+            "type": "array",
+            "description": "Server-side replacements applied to the ACTIVE source, so the unchanged lines never travel. Each hunk must match expected_count times (default 1) or nothing is written (CONTENT_MISMATCH).",
+            "items": {
+              "type": "object",
+              "properties": {
+                "old": {
+                  "type": "string",
+                  "description": "Exact text to find."
+                },
+                "new": {
+                  "type": "string",
+                  "description": "Replacement text."
+                },
+                "expected_count": {
+                  "type": "number",
+                  "description": "How many occurrences must exist. Default 1."
+                }
+              },
+              "required": [
+                "old",
+                "new"
+              ]
+            }
+          },
+          "expected_line_count": {
+            "type": "number",
+            "description": "Integrity check: abort with CONTENT_MISMATCH (nothing written) when the payload line count differs from this value."
+          },
+          "expected_sha256": {
+            "type": "string",
+            "description": "Integrity check: abort with CONTENT_MISMATCH (nothing written) when sha256(payload) differs from this hex digest."
+          },
+          "check_no_change": {
+            "type": "boolean",
+            "description": "Read the active version first and answer no_change=true (no lock, no write) when it already equals the payload. Default false: the write happens as before."
           }
         },
         "required": [
           "function_module_name",
           "function_group_name",
-          "source_code",
           "lock_handle"
         ]
       }
@@ -10873,7 +11114,7 @@
     },
     {
       "name": "UpdateInclude",
-      "description": "Update source code of an existing ABAP Include program (Type I). Locks the include, uploads new source code, and unlocks. Optionally activates after update. Use this instead of UpdateProgram for Type I include programs.",
+      "description": "Update source code of an existing ABAP Include program (Type I). Locks the include, uploads new source code, and unlocks. Optionally activates after update. Use this instead of UpdateProgram for Type I include programs. Alternatively pass source_file (local path, read server-side) or patch (old/new hunks applied to the active source).",
       "inputSchema": {
         "type": "object",
         "properties": {
@@ -10896,17 +11137,57 @@
           "activate": {
             "type": "boolean",
             "description": "Activate include after source update. Default: false. Set to true to activate immediately."
+          },
+          "source_file": {
+            "type": "string",
+            "description": "Absolute path to a UTF-8 file read by the gateway. Alternative to source_code — pass exactly one of source_code / source_file. Use it for large sources instead of inlining 100 KB of escaped JSON."
+          },
+          "patch": {
+            "type": "array",
+            "description": "Server-side replacements applied to the ACTIVE source, so the unchanged lines never travel. Each hunk must match expected_count times (default 1) or nothing is written (CONTENT_MISMATCH).",
+            "items": {
+              "type": "object",
+              "properties": {
+                "old": {
+                  "type": "string",
+                  "description": "Exact text to find."
+                },
+                "new": {
+                  "type": "string",
+                  "description": "Replacement text."
+                },
+                "expected_count": {
+                  "type": "number",
+                  "description": "How many occurrences must exist. Default 1."
+                }
+              },
+              "required": [
+                "old",
+                "new"
+              ]
+            }
+          },
+          "expected_line_count": {
+            "type": "number",
+            "description": "Integrity check: abort with CONTENT_MISMATCH (nothing written) when the payload line count differs from this value."
+          },
+          "expected_sha256": {
+            "type": "string",
+            "description": "Integrity check: abort with CONTENT_MISMATCH (nothing written) when sha256(payload) differs from this hex digest."
+          },
+          "check_no_change": {
+            "type": "boolean",
+            "description": "Read the active version first and answer no_change=true (no lock, no write) when it already equals the payload. Default false: the write happens as before."
           }
         },
         "required": [
-          "include_name",
-          "source_code"
+          "include_name"
         ]
       }
     },
     {
       "name": "UpdateInterface",
-      "description": "Update source code of an existing ABAP interface. Uses stateful session with proper lock/unlock mechanism. Lock handle and transport number are passed in URL parameters.",
+      "description": "Update source code of an existing ABAP interface. Uses stateful session with proper lock/unlock mechanism. Lock handle and transport number are passed in URL parameters. Alternatively pass source_file (local path, read server-side) or patch (old/new hunks applied to the active source).",
       "inputSchema": {
         "type": "object",
         "properties": {
@@ -10925,17 +11206,57 @@
           "activate": {
             "type": "boolean",
             "description": "Activate interface after update. Default: true."
+          },
+          "source_file": {
+            "type": "string",
+            "description": "Absolute path to a UTF-8 file read by the gateway. Alternative to source_code — pass exactly one of source_code / source_file. Use it for large sources instead of inlining 100 KB of escaped JSON."
+          },
+          "patch": {
+            "type": "array",
+            "description": "Server-side replacements applied to the ACTIVE source, so the unchanged lines never travel. Each hunk must match expected_count times (default 1) or nothing is written (CONTENT_MISMATCH).",
+            "items": {
+              "type": "object",
+              "properties": {
+                "old": {
+                  "type": "string",
+                  "description": "Exact text to find."
+                },
+                "new": {
+                  "type": "string",
+                  "description": "Replacement text."
+                },
+                "expected_count": {
+                  "type": "number",
+                  "description": "How many occurrences must exist. Default 1."
+                }
+              },
+              "required": [
+                "old",
+                "new"
+              ]
+            }
+          },
+          "expected_line_count": {
+            "type": "number",
+            "description": "Integrity check: abort with CONTENT_MISMATCH (nothing written) when the payload line count differs from this value."
+          },
+          "expected_sha256": {
+            "type": "string",
+            "description": "Integrity check: abort with CONTENT_MISMATCH (nothing written) when sha256(payload) differs from this hex digest."
+          },
+          "check_no_change": {
+            "type": "boolean",
+            "description": "Read the active version first and answer no_change=true (no lock, no write) when it already equals the payload. Default false: the write happens as before."
           }
         },
         "required": [
-          "interface_name",
-          "source_code"
+          "interface_name"
         ]
       }
     },
     {
       "name": "UpdateInterfaceLow",
-      "description": "[low-level] Update source code of an existing ABAP interface. Requires lock handle from LockObject. - use UpdateInterface (high-level) for full workflow with lock/unlock/activate.",
+      "description": "[low-level] Update source code of an existing ABAP interface. Requires lock handle from LockObject. - use UpdateInterface (high-level) for full workflow with lock/unlock/activate. Alternatively pass source_file (local path, read server-side) or patch (old/new hunks applied to the active source).",
       "inputSchema": {
         "type": "object",
         "properties": {
@@ -10969,11 +11290,51 @@
                 "type": "object"
               }
             }
+          },
+          "source_file": {
+            "type": "string",
+            "description": "Absolute path to a UTF-8 file read by the gateway. Alternative to source_code — pass exactly one of source_code / source_file. Use it for large sources instead of inlining 100 KB of escaped JSON."
+          },
+          "patch": {
+            "type": "array",
+            "description": "Server-side replacements applied to the ACTIVE source, so the unchanged lines never travel. Each hunk must match expected_count times (default 1) or nothing is written (CONTENT_MISMATCH).",
+            "items": {
+              "type": "object",
+              "properties": {
+                "old": {
+                  "type": "string",
+                  "description": "Exact text to find."
+                },
+                "new": {
+                  "type": "string",
+                  "description": "Replacement text."
+                },
+                "expected_count": {
+                  "type": "number",
+                  "description": "How many occurrences must exist. Default 1."
+                }
+              },
+              "required": [
+                "old",
+                "new"
+              ]
+            }
+          },
+          "expected_line_count": {
+            "type": "number",
+            "description": "Integrity check: abort with CONTENT_MISMATCH (nothing written) when the payload line count differs from this value."
+          },
+          "expected_sha256": {
+            "type": "string",
+            "description": "Integrity check: abort with CONTENT_MISMATCH (nothing written) when sha256(payload) differs from this hex digest."
+          },
+          "check_no_change": {
+            "type": "boolean",
+            "description": "Read the active version first and answer no_change=true (no lock, no write) when it already equals the payload. Default false: the write happens as before."
           }
         },
         "required": [
           "interface_name",
-          "source_code",
           "lock_handle"
         ]
       }
@@ -11100,7 +11461,7 @@
     },
     {
       "name": "UpdateMetadataExtension",
-      "description": "Update source code of an ABAP Metadata Extension (DDLX). Modifies Fiori UI annotations, field labels, search help, and list/object page layout for CDS views.",
+      "description": "Update source code of an ABAP Metadata Extension (DDLX). Modifies Fiori UI annotations, field labels, search help, and list/object page layout for CDS views. Alternatively pass source_file (local path, read server-side) or patch (old/new hunks applied to the active source).",
       "inputSchema": {
         "type": "object",
         "properties": {
@@ -11123,17 +11484,57 @@
           "activate": {
             "type": "boolean",
             "description": "Activate after update. Default: true"
+          },
+          "source_file": {
+            "type": "string",
+            "description": "Absolute path to a UTF-8 file read by the gateway. Alternative to source_code — pass exactly one of source_code / source_file. Use it for large sources instead of inlining 100 KB of escaped JSON."
+          },
+          "patch": {
+            "type": "array",
+            "description": "Server-side replacements applied to the ACTIVE source, so the unchanged lines never travel. Each hunk must match expected_count times (default 1) or nothing is written (CONTENT_MISMATCH).",
+            "items": {
+              "type": "object",
+              "properties": {
+                "old": {
+                  "type": "string",
+                  "description": "Exact text to find."
+                },
+                "new": {
+                  "type": "string",
+                  "description": "Replacement text."
+                },
+                "expected_count": {
+                  "type": "number",
+                  "description": "How many occurrences must exist. Default 1."
+                }
+              },
+              "required": [
+                "old",
+                "new"
+              ]
+            }
+          },
+          "expected_line_count": {
+            "type": "number",
+            "description": "Integrity check: abort with CONTENT_MISMATCH (nothing written) when the payload line count differs from this value."
+          },
+          "expected_sha256": {
+            "type": "string",
+            "description": "Integrity check: abort with CONTENT_MISMATCH (nothing written) when sha256(payload) differs from this hex digest."
+          },
+          "check_no_change": {
+            "type": "boolean",
+            "description": "Read the active version first and answer no_change=true (no lock, no write) when it already equals the payload. Default false: the write happens as before."
           }
         },
         "required": [
-          "name",
-          "source_code"
+          "name"
         ]
       }
     },
     {
       "name": "UpdateMetadataExtensionLow",
-      "description": "[low-level] Update source code of an existing ABAP metadata extension. Requires lock handle from LockObject. - use UpdateMetadataExtension (high-level) for full workflow with lock/unlock/activate.",
+      "description": "[low-level] Update source code of an existing ABAP metadata extension. Requires lock handle from LockObject. - use UpdateMetadataExtension (high-level) for full workflow with lock/unlock/activate. Alternatively pass source_file (local path, read server-side) or patch (old/new hunks applied to the active source).",
       "inputSchema": {
         "type": "object",
         "properties": {
@@ -11171,11 +11572,51 @@
                 "type": "object"
               }
             }
+          },
+          "source_file": {
+            "type": "string",
+            "description": "Absolute path to a UTF-8 file read by the gateway. Alternative to source_code — pass exactly one of source_code / source_file. Use it for large sources instead of inlining 100 KB of escaped JSON."
+          },
+          "patch": {
+            "type": "array",
+            "description": "Server-side replacements applied to the ACTIVE source, so the unchanged lines never travel. Each hunk must match expected_count times (default 1) or nothing is written (CONTENT_MISMATCH).",
+            "items": {
+              "type": "object",
+              "properties": {
+                "old": {
+                  "type": "string",
+                  "description": "Exact text to find."
+                },
+                "new": {
+                  "type": "string",
+                  "description": "Replacement text."
+                },
+                "expected_count": {
+                  "type": "number",
+                  "description": "How many occurrences must exist. Default 1."
+                }
+              },
+              "required": [
+                "old",
+                "new"
+              ]
+            }
+          },
+          "expected_line_count": {
+            "type": "number",
+            "description": "Integrity check: abort with CONTENT_MISMATCH (nothing written) when the payload line count differs from this value."
+          },
+          "expected_sha256": {
+            "type": "string",
+            "description": "Integrity check: abort with CONTENT_MISMATCH (nothing written) when sha256(payload) differs from this hex digest."
+          },
+          "check_no_change": {
+            "type": "boolean",
+            "description": "Read the active version first and answer no_change=true (no lock, no write) when it already equals the payload. Default false: the write happens as before."
           }
         },
         "required": [
           "name",
-          "source_code",
           "lock_handle"
         ]
       }
@@ -11236,7 +11677,7 @@
     },
     {
       "name": "UpdateProgram",
-      "description": "Update source code of an existing ABAP program. Locks the program, checks new code, uploads new source code, and unlocks. Optionally activates after update. Use this to modify existing programs without re-creating metadata.",
+      "description": "Update source code of an existing ABAP program. Locks the program, checks new code, uploads new source code, and unlocks. Optionally activates after update. Use this to modify existing programs without re-creating metadata. Alternatively pass source_file (local path, read server-side) or patch (old/new hunks applied to the active source).",
       "inputSchema": {
         "type": "object",
         "properties": {
@@ -11255,17 +11696,57 @@
           "activate": {
             "type": "boolean",
             "description": "Activate program after source update. Default: false. Set to true to activate immediately, or use ActivateObject for batch activation."
+          },
+          "source_file": {
+            "type": "string",
+            "description": "Absolute path to a UTF-8 file read by the gateway. Alternative to source_code — pass exactly one of source_code / source_file. Use it for large sources instead of inlining 100 KB of escaped JSON."
+          },
+          "patch": {
+            "type": "array",
+            "description": "Server-side replacements applied to the ACTIVE source, so the unchanged lines never travel. Each hunk must match expected_count times (default 1) or nothing is written (CONTENT_MISMATCH).",
+            "items": {
+              "type": "object",
+              "properties": {
+                "old": {
+                  "type": "string",
+                  "description": "Exact text to find."
+                },
+                "new": {
+                  "type": "string",
+                  "description": "Replacement text."
+                },
+                "expected_count": {
+                  "type": "number",
+                  "description": "How many occurrences must exist. Default 1."
+                }
+              },
+              "required": [
+                "old",
+                "new"
+              ]
+            }
+          },
+          "expected_line_count": {
+            "type": "number",
+            "description": "Integrity check: abort with CONTENT_MISMATCH (nothing written) when the payload line count differs from this value."
+          },
+          "expected_sha256": {
+            "type": "string",
+            "description": "Integrity check: abort with CONTENT_MISMATCH (nothing written) when sha256(payload) differs from this hex digest."
+          },
+          "check_no_change": {
+            "type": "boolean",
+            "description": "Read the active version first and answer no_change=true (no lock, no write) when it already equals the payload. Default false: the write happens as before."
           }
         },
         "required": [
-          "program_name",
-          "source_code"
+          "program_name"
         ]
       }
     },
     {
       "name": "UpdateProgramLow",
-      "description": "[low-level] Update source code of an existing ABAP program. Requires lock handle from LockObject. - use UpdateProgram (high-level) for full workflow with lock/unlock/activate.",
+      "description": "[low-level] Update source code of an existing ABAP program. Requires lock handle from LockObject. - use UpdateProgram (high-level) for full workflow with lock/unlock/activate. Alternatively pass source_file (local path, read server-side) or patch (old/new hunks applied to the active source).",
       "inputSchema": {
         "type": "object",
         "properties": {
@@ -11303,11 +11784,51 @@
                 "type": "object"
               }
             }
+          },
+          "source_file": {
+            "type": "string",
+            "description": "Absolute path to a UTF-8 file read by the gateway. Alternative to source_code — pass exactly one of source_code / source_file. Use it for large sources instead of inlining 100 KB of escaped JSON."
+          },
+          "patch": {
+            "type": "array",
+            "description": "Server-side replacements applied to the ACTIVE source, so the unchanged lines never travel. Each hunk must match expected_count times (default 1) or nothing is written (CONTENT_MISMATCH).",
+            "items": {
+              "type": "object",
+              "properties": {
+                "old": {
+                  "type": "string",
+                  "description": "Exact text to find."
+                },
+                "new": {
+                  "type": "string",
+                  "description": "Replacement text."
+                },
+                "expected_count": {
+                  "type": "number",
+                  "description": "How many occurrences must exist. Default 1."
+                }
+              },
+              "required": [
+                "old",
+                "new"
+              ]
+            }
+          },
+          "expected_line_count": {
+            "type": "number",
+            "description": "Integrity check: abort with CONTENT_MISMATCH (nothing written) when the payload line count differs from this value."
+          },
+          "expected_sha256": {
+            "type": "string",
+            "description": "Integrity check: abort with CONTENT_MISMATCH (nothing written) when sha256(payload) differs from this hex digest."
+          },
+          "check_no_change": {
+            "type": "boolean",
+            "description": "Read the active version first and answer no_change=true (no lock, no write) when it already equals the payload. Default false: the write happens as before."
           }
         },
         "required": [
           "program_name",
-          "source_code",
           "lock_handle"
         ]
       }
@@ -11456,7 +11977,7 @@
     },
     {
       "name": "UpdateServiceDefinition",
-      "description": "Update source code of an existing ABAP service definition. Uses stateful session with proper lock/unlock mechanism.",
+      "description": "Update source code of an existing ABAP service definition. Uses stateful session with proper lock/unlock mechanism. Alternatively pass source_file (local path, read server-side) or patch (old/new hunks applied to the active source).",
       "inputSchema": {
         "type": "object",
         "properties": {
@@ -11475,11 +11996,51 @@
           "activate": {
             "type": "boolean",
             "description": "Activate service definition after update. Default: true."
+          },
+          "source_file": {
+            "type": "string",
+            "description": "Absolute path to a UTF-8 file read by the gateway. Alternative to source_code — pass exactly one of source_code / source_file. Use it for large sources instead of inlining 100 KB of escaped JSON."
+          },
+          "patch": {
+            "type": "array",
+            "description": "Server-side replacements applied to the ACTIVE source, so the unchanged lines never travel. Each hunk must match expected_count times (default 1) or nothing is written (CONTENT_MISMATCH).",
+            "items": {
+              "type": "object",
+              "properties": {
+                "old": {
+                  "type": "string",
+                  "description": "Exact text to find."
+                },
+                "new": {
+                  "type": "string",
+                  "description": "Replacement text."
+                },
+                "expected_count": {
+                  "type": "number",
+                  "description": "How many occurrences must exist. Default 1."
+                }
+              },
+              "required": [
+                "old",
+                "new"
+              ]
+            }
+          },
+          "expected_line_count": {
+            "type": "number",
+            "description": "Integrity check: abort with CONTENT_MISMATCH (nothing written) when the payload line count differs from this value."
+          },
+          "expected_sha256": {
+            "type": "string",
+            "description": "Integrity check: abort with CONTENT_MISMATCH (nothing written) when sha256(payload) differs from this hex digest."
+          },
+          "check_no_change": {
+            "type": "boolean",
+            "description": "Read the active version first and answer no_change=true (no lock, no write) when it already equals the payload. Default false: the write happens as before."
           }
         },
         "required": [
-          "service_definition_name",
-          "source_code"
+          "service_definition_name"
         ]
       }
     },

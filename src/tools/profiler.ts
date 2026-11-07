@@ -1,7 +1,7 @@
 /**
  * Profiler runs.
  *
- * "Run with profiling" is not a single request. Measured 2026-11-04 on DS4/100:
+ * "Run with profiling" is not a single request. Measured on DS4/100:
  *
  *   1. `POST /runtime/traces/abaptraces/parameters` creates the settings — the answer
  *      carries the profiler id in `Location`
@@ -21,6 +21,9 @@ import type { ToolRegistry, ToolContext } from "../engine/registry.js";
 import type { GatewayRuntime } from "../runtime.js";
 import type { AdtSession } from "../adt/session.js";
 import { GatewayError } from "../engine/errors.js";
+import { AdtError } from "../adt/errors.js";
+import { hasSignal } from "../adt/signals.js";
+import { childTextOf, findElements, nodeTextOf, parseXml } from "../adt/xml.js";
 
 type Args = Record<string, unknown>;
 
@@ -115,21 +118,45 @@ interface TraceFile {
   readonly id: string;
   readonly objectName: string;
   readonly published: string;
+  readonly size_kb?: number;
+  readonly runtime_ms?: number;
 }
 
-/** The finished trace files, as `<atom:entry>` elements of the collection feed. */
-async function traceFiles(session: AdtSession): Promise<TraceFile[]> {
+/**
+ * The finished trace files, as `<atom:entry>` elements of the collection feed.
+ *
+ * `RuntimeListProfilerTraceFiles` used to answer the feed itself: 564 KB of `raw_xml` on the
+ * reference system (measured ), which floods a caller's context and makes the one
+ * field it wants (`atom:id`) hard to find. The entries are parsed here, newest first, and
+ * capped — `truncated` says whether anything was left out.
+ */
+async function traceFiles(session: AdtSession, limit = 100): Promise<TraceFile[]> {
   const response = await session.request({ path: "/runtime/traces/abaptraces", accept: TRACE_FEED });
   const body = String(response.body ?? "");
-  return body
-    .split("<atom:entry")
-    .slice(1)
-    .map((chunk) => ({
-      id: /<atom:id>[^<]*\/abaptraces\/([0-9A-Fa-f]{32})<\/atom:id>/.exec(chunk)?.[1]?.toUpperCase() ?? "",
-      objectName: /<trc:objectName>([^<]*)<\/trc:objectName>/.exec(chunk)?.[1] ?? "",
-      published: /<atom:published>([^<]*)<\/atom:published>/.exec(chunk)?.[1] ?? "",
-    }))
+  const parsed = parseXml(body);
+  if (parsed === undefined) return [];
+  // Structural: `split("<atom:entry")` cut the feed at a string that also appears inside
+  // escaped text, and the per-chunk regexes needed the namespace prefix spelled exactly.
+  const entries = findElements(parsed, "entry")
+    .map((entry) => {
+      const published = childTextOf(entry, "published") ?? "";
+      const objectName = findElements(entry, "objectName")[0];
+      const size = findElements(entry, "size")[0];
+      const runtime = findElements(entry, "runtime")[0];
+      const sizeBytes = size === undefined ? Number.NaN : Number(nodeTextOf(size));
+      const runtimeMs = runtime === undefined ? Number.NaN : Number(nodeTextOf(runtime));
+      return {
+        id: /([0-9A-Fa-f]{32})$/.exec(childTextOf(entry, "id") ?? "")?.[1]?.toUpperCase() ?? "",
+        // The `title` of an entry is the package (`$TMP`) or the object it belongs to.
+        objectName: objectName === undefined ? (childTextOf(entry, "title") ?? "") : nodeTextOf(objectName),
+        published,
+        ...(Number.isFinite(sizeBytes) ? { size_kb: Math.round((sizeBytes / 1024) * 10) / 10 } : {}),
+        ...(Number.isFinite(runtimeMs) ? { runtime_ms: runtimeMs } : {}),
+      };
+    })
     .filter((entry) => entry.id.length > 0);
+  entries.sort((left, right) => (left.published < right.published ? 1 : -1));
+  return entries.slice(0, limit);
 }
 
 /**
@@ -140,8 +167,8 @@ async function traceFiles(session: AdtSession): Promise<TraceFile[]> {
 /**
  * Whether a trace file belongs to the object we ran.
  *
- * A program is named plainly (`ZMMR9020`), a class by the generated class pool name —
- * measured 2026-11-04: `ZCL_MCP9003===================CP`. Matching the name exactly left
+ * A program is named plainly (`ZDEMO_REPORT`), a class by the generated class pool name —
+ * measured: `ZCL_DEMO_REPORT================CP`. Matching the name exactly left
  * every class run looking as if it had produced no trace at all.
  */
 function isTraceOf(objectName: string, wanted: string): boolean {
@@ -183,6 +210,36 @@ async function runWithProfiling(
     headers: { "X-sap-adt-profiling": "server-time" },
     timeoutMs: 300_000,
   });
+  const output = String(response.body ?? "").slice(0, 4_000);
+  // Measured live: profiling a program that does not exist answered
+  // `{success: true, run_status: 200, output: "Error: Program does not exist!",
+  // trace_id: "", trace_pending: true}` — the run endpoint reports the failure in the
+  // body with a 200, so `success` said the opposite of `output`, and the eight-second
+  // trace wait ran for a trace that could never appear. Checked before the wait, so a
+  // failed run answers at once.
+  if (/does not exist|cannot be executed/i.test(output)) {
+    throw new AdtError({
+      code: "not-found",
+      message: `Not found: ${objectName} — the profiled run answered "${output.trim()}".`,
+      nextAction: `Check the name with SearchObject; a class runs as <NAME>================CP, and the object must exist and be active before it can be profiled.`,
+      status: response.status,
+      method: "POST",
+      path: runPath,
+      sapText: output.trim(),
+    });
+  }
+  // Measured live: `RuntimeRunClassWithProfiling ZCL_MCP_T02` answered
+  // `{success: true, trace_pending: true}` while `output` said "For console output, a class
+  // must implement IF_OO_ADT_CLASSRUN" — the run never happened, so no trace could appear.
+  // Checked before the wait: a run that already said why it failed does not need eight
+  // seconds of polling to prove it.
+  if (hasSignal(output, "classrun-not-supported")) {
+    throw new GatewayError("UPSTREAM_FAILED", `${objectName} cannot be run as a console app: ${output.trim()}`, {
+      kind: "classrun-not-supported",
+      nextAction:
+        "Implement IF_OO_ADT_CLASSRUN on the class (directly or through CL_XCO_CP_ADT_SIMPLE_CLASSRUN / CL_XCO_ADT_CR_SIMPLE_ABSTR / CL_DEMO_CLASSRUN), or profile a program instead.",
+    });
+  }
   const traceId = await waitForTrace(session, objectName, startedAt);
   return {
     success: true,
@@ -198,7 +255,7 @@ async function runWithProfiling(
             "List the trace files with RuntimeListProfilerTraceFiles and pass the 32-hex id to RuntimeGetProfilerTraceData.",
         }
       : { trace_id: traceId }),
-    output: String(response.body ?? "").slice(0, 4_000),
+    output,
     session_id: "", // filled in by the caller
   };
 }
@@ -225,6 +282,22 @@ export function registerProfilerTools(registry: ToolRegistry, runtime: GatewayRu
 
   register("RuntimeRunProgramWithProfiling", (args, ctx) => run(args, ctx, "PROGRAM"));
   register("RuntimeRunClassWithProfiling", (args, ctx) => run(args, ctx, "CLASS"));
+
+  // The route for this one answered the whole Atom feed (564 KB measured ) under a
+  // description that promises "parsed JSON payload". Registered here so it answers entries.
+  register("RuntimeListProfilerTraceFiles", async (_args, ctx) => {
+    const resolved = runtime.resolve(ctx.system, undefined, false);
+    const limit = 100;
+    const traces = await traceFiles(resolved.session, limit);
+    return {
+      success: true,
+      path: "/runtime/traces/abaptraces",
+      count: traces.length,
+      truncated: traces.length === limit,
+      traces,
+      session_id: resolved.sessionId,
+    };
+  });
 
   // `HandlerProfileRun` is the same run behind a `target_type` switch.
   register("HandlerProfileRun", (args, ctx) => {

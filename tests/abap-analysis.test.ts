@@ -32,7 +32,7 @@ const system = {
 
 function booted(): { call: (tool: string, args: Record<string, unknown>) => Promise<unknown>; urls: string[] } {
   const urls: string[] = [];
-  const fetchImpl = (async (input: RequestInfo | URL) => {
+  const fetchImpl = (async (input: string | URL | Request) => {
     const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
     urls.push(url);
     return new Response("<ok/>", { status: 200, headers: { "x-csrf-token": "token" } });
@@ -148,6 +148,25 @@ describe("GetAbapSemanticAnalysis", () => {
     expect(answer.references).toContainEqual({ name: "ZCONVERT_TO_CAPITALIZATION", kind: "function_module" });
     expect(answer.references).toContainEqual({ name: "SY-SUBRC", kind: "system_field" });
     expect(answer.references.some((reference) => reference.kind === "type" && reference.name === "TY_COUNT")).toBe(true);
+  });
+
+  it("reports report-level declarations, which the parser model does not carry", async () => {
+    // Measured live: a report with `DATA: lv_x TYPE i.` answered `symbol_count: 0`,
+    // and a `PERFORM missing_form.` produced no reference at all.
+    const { call } = booted();
+    const answer = (await call("GetAbapSemanticAnalysis", {
+      code: ["REPORT zprobe.", "DATA: lv_x TYPE i, lv_y TYPE i.", "CONSTANTS c_one TYPE i VALUE 1.", "PERFORM missing_form."].join("\n"),
+    })) as SemanticAnswer & { analysis_level: string };
+
+    expect(answer.analysis_level).toBe("parse");
+    expect(answer.symbols).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ name: "LV_X", kind: "variable" }),
+        expect.objectContaining({ name: "LV_Y", kind: "variable" }),
+        expect.objectContaining({ name: "C_ONE", kind: "constant" }),
+      ]),
+    );
+    expect(answer.references).toContainEqual({ name: "MISSING_FORM", kind: "form" });
   });
 });
 

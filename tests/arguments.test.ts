@@ -1,7 +1,7 @@
 /**
  * Argument discipline.
  *
- * Measured bug (2026-11-04): `CreateProgram` was called with a `source_code` its
+ * Measured bug: `CreateProgram` was called with a `source_code` its
  * schema never declared. Every argument was accepted, nothing was written, and the
  * result read like success — SAP had created the object with its own template. The
  * same silence hid a wrong parameter name in `UpdateTable` / `UpdateStructure`
@@ -73,6 +73,108 @@ describe("undeclared arguments", () => {
       ok: true,
     });
     expect(calls).toHaveLength(1);
+  });
+});
+
+/**
+ * Measured: `CreateProgram {program_type: "report"}` answered `success: true`
+ * and created the program with the **default** type — the word "report" was dropped,
+ * because nothing read the schema's `enum`. A closed set is a promise to the caller, so
+ * a value outside it has to be an error naming the whole set.
+ */
+describe("arguments outside their enum", () => {
+  it("rejects a program_type the schema does not list, and names the allowed set", async () => {
+    const { registry, calls } = probe("CreateProgram");
+    await expect(
+      registry.call("CreateProgram", { program_name: "ZFOO", package_name: "$TMP", program_type: "report" }, ctx),
+    ).rejects.toMatchObject({
+      code: "INVALID_ARGUMENT",
+      details: expect.objectContaining({
+        argument: "program_type",
+        value: "report",
+        allowed: expect.arrayContaining(["executable", "include", "module_pool"]),
+      }),
+    });
+    // Nothing may reach SAP: an ignored word is how "report" became a silent default.
+    expect(calls).toHaveLength(0);
+  });
+
+  it("accepts a value from the enum", async () => {
+    const { registry, calls } = probe("CreateProgram");
+    await expect(
+      registry.call("CreateProgram", { program_name: "ZFOO", package_name: "$TMP", program_type: "include" }, ctx),
+    ).resolves.toEqual({ ok: true });
+    expect(calls).toHaveLength(1);
+  });
+
+  it("leaves fields without an enum alone, including boolean and number switches", async () => {
+    const { registry, calls } = probe("CreateClass");
+    await expect(
+      registry.call("CreateClass", { class_name: "ZCL_FOO", package_name: "$TMP", final: true, abstract: false }, ctx),
+    ).resolves.toEqual({ ok: true });
+    expect(calls).toHaveLength(1);
+  });
+
+  it("keeps the case tolerance the families already had", async () => {
+    const { registry, calls } = probe("CreateServiceBinding");
+    await expect(
+      registry.call(
+        "CreateServiceBinding",
+        {
+          service_binding_name: "ZUI_FOO",
+          service_definition_name: "ZSD_FOO",
+          package_name: "$TMP",
+          binding_type: "odatav2",
+        },
+        ctx,
+      ),
+    ).resolves.toEqual({ ok: true });
+    expect(calls).toHaveLength(1);
+  });
+
+  it("does not preempt a resolver that accepts aliases of object_type", async () => {
+    // `FUGR` is an alias of `FUNCTION_GROUP`; the route table maps it and refuses the
+    // values it does not know with its own message, so the enum must not answer first.
+    const { registry, calls } = probe("LockObjectLow");
+    await expect(
+      registry.call("LockObjectLow", { object_type: "FUGR", object_name: "ZFG_FOO" }, ctx),
+    ).resolves.toEqual({ ok: true });
+    expect(calls).toHaveLength(1);
+  });
+});
+
+/**
+ * Measured: `CreateProgram {program_name}` created the object in `$TMP` although
+ * the schema requires `package_name`, and `CreateProgramLow {program_name, package_name}`
+ * defaulted the missing `description` to the object name. Both arguments were listed under
+ * `required` and enforced nowhere.
+ */
+describe("required arguments", () => {
+  it("rejects a call that omits one and names it", async () => {
+    const { registry, calls } = probe("CreateProgramLow");
+    await expect(
+      registry.call("CreateProgramLow", { program_name: "ZFOO", package_name: "$TMP" }, ctx),
+    ).rejects.toMatchObject({
+      code: "INVALID_ARGUMENT",
+      details: expect.objectContaining({ missing: "description" }),
+    });
+    expect(calls).toHaveLength(0);
+  });
+
+  it("names every missing argument, not only the first", async () => {
+    const { registry } = probe("CreateProgramLow");
+    await expect(registry.call("CreateProgramLow", {}, ctx)).rejects.toMatchObject({
+      details: expect.objectContaining({ missing: "program_name, description, package_name" }),
+    });
+  });
+
+  it("keeps the stray-argument message for a wrong spelling", async () => {
+    // `{table_name, source_code}` forgot nothing — it used the wrong name, and saying
+    // "missing ddl_code" would hide that.
+    const { registry } = probe("UpdateTable");
+    await expect(registry.call("UpdateTable", { table_name: "ZTFOO", source_code: "x" }, ctx)).rejects.toMatchObject({
+      details: expect.objectContaining({ unknown: "source_code" }),
+    });
   });
 });
 

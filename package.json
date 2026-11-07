@@ -34,6 +34,7 @@
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "check": "tsc -p tsconfig.json --noEmit",
+    "check:tests": "tsc -p tsconfig.test.json",
     "test": "vitest run",
     "test:watch": "vitest",
     "analyze": "node tools/scripts/analyze-catalog.mjs",
@@ -47,13 +48,16 @@
     "verify:deprecated": "node tools/scripts/check-deprecated.mjs",
     "verify:schema": "npm run build && node tools/scripts/gen-schema.mjs --check",
     "verify:docs": "node tools/scripts/gen-tools-doc.mjs --check",
-    "verify": "npm run verify:catalog && npm run verify:private && npm run verify:deprecated && npm run check && npm run verify:schema && npm run verify:docs && npm test",
-    "live:smoke": "node tools/scripts/live-smoke.mjs",
-    "live:families": "node tools/scripts/live-families.mjs"
+    "verify:style": "node tools/scripts/verify-docs-style.mjs",
+    "verify": "npm run verify:catalog && npm run verify:private && npm run verify:deprecated && npm run check && npm run check:tests && npm run verify:schema && npm run verify:docs && npm run verify:style && npm run verify:coverage && npm test",
+    "live:families": "node tools/scripts/live-families.mjs --profile",
+    "live:tools": "node tools/scripts/live-tools.mjs",
+    "verify:coverage": "node dist/bin.js --coverage"
   },
   "dependencies": {
     "@abaplint/core": "^2.120.92",
     "@modelcontextprotocol/sdk": "^1.32.2",
+    "fast-xml-parser": "^5.12.0",
     "zod": "^3.23.8"
   },
   "optionalDependencies": {
@@ -73,4 +77,3 @@
     "model-context-protocol"
   ]
 }
-
